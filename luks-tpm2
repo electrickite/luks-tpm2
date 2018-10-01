@@ -1,0 +1,304 @@
+#!/bin/bash
+
+# Copyright 2018 Corey Hinshaw <coreyhinshaw@gmail.com>
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+usage() {
+  cat <<EOF
+Usage: luks-tpm2 [OPTION]... DEVICE ACTION
+Manage TPM 2.0 sealed LUKS keys on DEVICE
+
+Actions:
+  init       Initialize the LUKS TPM key slot
+  temp       Set a temporary LUKS passphrase
+  reset      Reset the LUKS TPM key using a passphrase
+  replace    Replace (overwrite) a LUKS TPM key
+
+Options:
+  -h         Print this help text
+  -m PATH    Mount point for the tmpfs file system used to store TPM keyfiles
+             Default: /root/keyfs
+  -p PATH    Sealed keyfile path
+             .priv will be added to the path for the private section and .pub
+             will be added for the public portion
+             Default: /boot/keyfile  (/boot/keyfile.priv /boot/keyfile.pub)
+  -H HEX     The TPM handle of the parent object for the sealed key
+             Default: 0x81000001
+  -x HEX     Index of the TPM NVRAM area holding the key
+  -s NUMBER  Key size in byes
+             Default: 32
+  -t NUMBER  LUKS slot number for the TPM key
+             Default: 1
+  -r NUMBER  LUKS slot number for temporary reset passphrase
+             Default: 2
+  -L STRING  List of PCR banks used to seal LUKS key
+             Default: sha1:0,2,4,7
+  -T STRING  TCTI module used to communicate with the TPM
+             Default: device:/dev/tpmrm0
+EOF
+}
+
+init_tpm_key() {
+  echo "WARNING: This will permanently delete the LUKS key in slot $TPM_KEY_SLOT!"
+  read -p "Do you wish to proceed? [Y/n] " choice
+  if [ "$choice" != "y" ] && [ "$choice" != "Y" ]; then
+    RETURN_CODE=0
+    return
+  fi
+
+  read -s -p "Enter any existing LUKS passphrase: " PASSPHRASE
+  echo
+
+  echo "Generating new LUKS key..."
+  generate_keyfile
+
+  echo "Removing existing key from slot $TPM_KEY_SLOT..."
+  echo $PASSPHRASE | cryptsetup luksKillSlot $ROOT_DEVICE $TPM_KEY_SLOT
+
+  echo "Adding new key to slot $TPM_KEY_SLOT..."
+  echo $PASSPHRASE | cryptsetup luksAddKey $ROOT_DEVICE "$KEYFILE" --key-slot $TPM_KEY_SLOT
+  addkey=$?
+
+  seal_key
+  seal=$?
+
+  if [ $addkey -ne 0 ] || [ $seal -ne 0 ]; then
+    echo "There was an error initializing the TPM key in slot $TPM_KEY_SLOT!" >&2
+    RETURN_CODE=8
+  fi
+}
+
+add_temp_key() {
+  unseal_key
+
+  echo "Preparing to set a temporary LUKS passphrase..."
+  if cryptsetup luksAddKey --key-slot $RESET_KEY_SLOT --key-file "$KEYFILE" $ROOT_DEVICE < /dev/tty; then
+    echo "After booting into the current kernel, run"
+    echo "  luks-tpm2 $(echo $ORIGINAL_ARGS | sed 's/temp$/reset/')"
+    echo "to generate a new LUKS key and remove this temporary key"
+  else
+    echo "A temporary passphrase was not set" >&2
+    RETURN_CODE=5
+  fi
+}
+
+reset_tpm_key() {
+  read -s -p "Enter any existing LUKS passphrase: " PASSPHRASE
+  echo
+
+  echo "Generating new LUKS key..."
+  generate_keyfile
+
+  echo "Removing current TPM key from slot $TPM_KEY_SLOT..."
+  echo $PASSPHRASE | cryptsetup luksKillSlot $ROOT_DEVICE $TPM_KEY_SLOT
+
+  echo "Adding new key to slot $TPM_KEY_SLOT..."
+  echo $PASSPHRASE | cryptsetup luksAddKey $ROOT_DEVICE "$KEYFILE" --key-slot $TPM_KEY_SLOT
+  addkey=$?
+
+  seal_key
+  seal=$?
+
+  if [ $addkey -eq 0 ] && [ $seal -eq 0 ]; then
+    echo "Removing temporary passphrase from slot $RESET_KEY_SLOT..."
+    cryptsetup luksKillSlot --key-file "$KEYFILE" $ROOT_DEVICE $RESET_KEY_SLOT
+  else
+    echo "There was an error resetting the TPM key in slot $TPM_KEY_SLOT!" >&2
+    echo "The temporary reset ket in slot $RESET_KEY_SLOT has not been removed." >&2
+    RETURN_CODE=4
+  fi
+}
+
+replace_tpm_key() {
+  original_keyfile="$KEYFILE.orig"
+  unseal_key
+  mv "$KEYFILE" "$original_keyfile"
+
+  generate_keyfile
+
+  echo "Replacing LUKS key in slot $TPM_KEY_SLOT..."
+  if cryptsetup luksChangeKey $ROOT_DEVICE "$KEYFILE" --key-slot $TPM_KEY_SLOT --key-file "$original_keyfile"; then
+    if ! seal_key; then
+      echo "There was an error sealing the new keyfile!" >&2
+      RETURN_CODE=7
+    fi
+  else
+    echo "There was an error replacing the TPM key in slot $TPM_KEY_SLOT!" >&2
+    RETURN_CODE=6
+  fi
+}
+
+create_tmpfs() {
+  mkdir -p "$TMPFS_MOUNT"
+  if ! mount tmpfs "$TMPFS_MOUNT" -t tmpfs -o size=1m; then
+    echo "Could not create tmpfs. Aborting..." >&2
+    exit 3
+  fi
+  chmod 700 "$TMPFS_MOUNT"
+}
+
+destroy_tmpfs() {
+  umount "$TMPFS_MOUNT"
+}
+
+unseal_key() {
+  if use_nvram; then
+    echo "Reading key from TPM NVRAM..."
+    tpm2_nvread -Q -x $NVRAM_HANDLE -a $NVRAM_HANDLE -L "$PCRS" -f "$KEYFILE"
+  else
+    echo "Usealing keyfile..."
+    tpm2_load -Q -H $PARENT_HANDLE -r "$SEALED_KEYFILE_PRIVATE" -u "$SEALED_KEYFILE_PUBLIC" -C "$OBJECT_CONTEXT"
+    tpm2_unseal -Q -c "$OBJECT_CONTEXT" -o "$KEYFILE" -L "$PCRS"
+    retval=$?
+    rm -f "$OBJECT_CONTEXT"
+    return $retval
+  fi
+}
+
+seal_key() {
+  tpm2_createpolicy -Q -P -L "$PCRS" -f "$POLICY_DIGEST"
+
+  if use_nvram; then
+    echo "Storing key in TPM NVRAM..."
+    tpm2_nvrelease -Q -x "$NVRAM_HANDLE" -a 0x40000001 >/dev/null 2>&1
+    tpm2_nvdefine -Q -x "$NVRAM_HANDLE" -a 0x40000001 -L "$POLICY_DIGEST" -s $KEY_SIZE -t "policyread|policywrite"
+    tpm2_nvwrite -Q -x "$NVRAM_HANDLE" -a "$NVRAM_HANDLE" -L "$PCRS" "$KEYFILE"
+  else
+    echo "Sealing keyfile with the TPM..."
+    rm -f "$SEALED_KEYFILE_PRIVATE" "$SEALED_KEYFILE_PUBLIC"
+    tpm2_create -Q -H "$PARENT_HANDLE" -g sha256 -G keyedhash -A 0x492 -I "$KEYFILE" -L "$POLICY_DIGEST" -r "$SEALED_KEYFILE_PRIVATE" -u "$SEALED_KEYFILE_PUBLIC"
+  fi
+  retval=$?
+
+  rm -f "$POLICY_DIGEST"
+  return $retval
+}
+
+use_nvram() {
+  [ -n "$NVRAM_HANDLE" ]
+}
+
+generate_keyfile() {
+  dd bs=$KEY_SIZE count=1 if=/dev/urandom of="$KEYFILE" >/dev/null 2>&1
+}
+
+ORIGINAL_ARGS="$@"
+TMPFS_MOUNT=/root/keyfs
+SEALED_KEYFILE_PUBLIC=/boot/keyfile.pub
+SEALED_KEYFILE_PRIVATE=/boot/keyfile.priv
+PARENT_HANDLE="0x81000001"
+NVRAM_HANDLE=""
+KEY_SIZE=32
+TPM_KEY_SLOT=1
+RESET_KEY_SLOT=2
+PCRS="sha1:0,2,4,7"
+
+export TPM2TOOLS_TCTI="device:/dev/tpmrm0"
+export TPM2TOOLS_TCTI_NAME="device:/dev/tpmrm0"
+
+while getopts ":hm:p:H:x:s:t:r:L:T:" opt; do
+  case $opt in
+    h)
+      usage
+      exit 0
+      ;;
+    m)
+      TMPFS_MOUNT="$OPTARG"
+      ;;
+    p)
+      SEALED_KEYFILE_PUBLIC="$OPTARG.pub"
+      SEALED_KEYFILE_PRIVATE="$OPTARG.priv"
+      ;;
+    H)
+      PARENT_HANDLE="$OPTARG"
+      ;;
+    x)
+      NVRAM_HANDLE="$OPTARG"
+      ;;
+    s)
+      if [[ ! $OPTARG =~ ^-?[0-9]+$ ]]; then
+        echo "Invalid key size: $OPTARG" >&2
+        exit 1
+      fi
+      TPM_KEY_SLOT=$OPTARG
+      ;;
+    t)
+      if [[ ! $OPTARG =~ ^-?[0-9]+$ ]] || [ $OPTARG -lt 0 ] || [ $OPTARG -gt 7 ]; then
+        echo "Invalid TPM key slot: $OPTARG" >&2
+        exit 1
+      fi
+      TPM_KEY_SLOT=$OPTARG
+      ;;
+    r)
+      if [[ ! $OPTARG =~ ^-?[0-9]+$ ]] || [ $OPTARG -lt 0 ] || [ $OPTARG -gt 7 ]; then
+        echo "Invalid reset key slot: $OPTARG" >&2
+        exit 1
+      fi
+      RESET_KEY_SLOT=$OPTARG
+      ;;
+    L)
+      PCRS="$OPTARG"
+      ;;
+    T)
+      export TPM2TOOLS_TCTI="$OPTARG"
+      export TPM2TOOLS_TCTI_NAME="$OPTARG"
+      ;;
+    \?)
+      echo "Invalid option: -$OPTARG" >&2
+      usage >&2
+      exit 1
+      ;;
+    :)
+      echo "Option -$OPTARG requires an argument." >&2
+      exit 1
+      ;;
+  esac
+done
+
+shift $((OPTIND-1))
+
+ROOT_DEVICE="$1"
+KEYFILE="$TMPFS_MOUNT/keyfile"
+POLICY_DIGEST="$TMPFS_MOUNT/policy.digest"
+OBJECT_CONTEXT="$TMPFS_MOUNT/object.context"
+RETURN_CODE=0
+
+if [ -z $ROOT_DEVICE ]; then
+  echo "Device not specified!" >&2
+  usage >&2
+  exit 1
+fi
+
+if [ $EUID -ne 0 ]; then
+  echo "Must be run as root" >&2
+  exit 2
+fi
+
+case "$2" in
+  init) ACTION=init_tpm_key;;
+  temp) ACTION=add_temp_key;;
+  reset) ACTION=reset_tpm_key;;
+  replace) ACTION=replace_tpm_key;;
+  *)
+    echo "Invalid action!" >&2
+    usage >&2
+    exit 1
+    ;;
+esac
+
+create_tmpfs
+$ACTION
+destroy_tmpfs
+exit $RETURN_CODE
