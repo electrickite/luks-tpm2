@@ -1,0 +1,27 @@
+# Configuration file for luks-tpm2
+#
+# Commented variables show default values.
+
+# Common settings
+#
+# TMPFS_MOUNT          Mount point for the tmpfs file system
+# SEALED_KEY_PUBLIC    Absolute path to public portion of the sealed key
+# SEALED_KEY_PRIVATE   Absolute path to private portion of the sealed key
+# PARENT_HANDLE        Handle of the parent key when sealing data on disk
+# NVRAM_INDEX          Index of NVRAM area to store key
+# KEY_SIZE             Size in bytes of the generated key
+# TPM_KEY_SLOT         LUKS slot number for the TPM-managed key
+# RESET_KEY_SLOT       LUKS slot number for temporary reset passphrase
+# PCRS                 TPM2-Tools PCR bank selection list
+# TPM2TOOLS_TCTI       TPM2-Tools TCTI identifier
+
+#TMPFS_MOUNT="/root/keyfs"
+#SEALED_KEY_PUBLIC="/boot/keyfile.pub"
+#SEALED_KEY_PRIVATE="/boot/keyfile.priv"
+#PARENT_HANDLE="0x81000001"
+#NVRAM_INDEX=""
+#KEY_SIZE=32
+#TPM_KEY_SLOT=1
+#RESET_KEY_SLOT=2
+#PCRS="sha1:0,2,4,7"
+#TPM2TOOLS_TCTI="device:/dev/tpmrm0"

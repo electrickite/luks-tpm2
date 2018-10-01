@@ -19,7 +19,6 @@
 usage() {
   cat <<EOF
 Usage: luks-tpm2 [OPTION]... DEVICE ACTION
-Manage TPM 2.0 sealed LUKS keys on DEVICE
 
 Actions:
   init       Initialize the LUKS TPM key slot
@@ -164,11 +163,11 @@ destroy_tmpfs() {
 unseal_key() {
   if use_nvram; then
     echo "Reading key from TPM NVRAM..."
-    tpm2_nvread -Q -x $NVRAM_HANDLE -a $NVRAM_HANDLE -L "$PCRS" -f "$KEYFILE"
+    tpm2_nvread -x $NVRAM_INDEX -a $NVRAM_INDEX -L "$PCRS" -f "$KEYFILE" >/dev/null
   else
     echo "Usealing keyfile..."
-    tpm2_load -Q -H $PARENT_HANDLE -r "$SEALED_KEYFILE_PRIVATE" -u "$SEALED_KEYFILE_PUBLIC" -C "$OBJECT_CONTEXT"
-    tpm2_unseal -Q -c "$OBJECT_CONTEXT" -o "$KEYFILE" -L "$PCRS"
+    tpm2_load -H $PARENT_HANDLE -r "$SEALED_KEY_PRIVATE" -u "$SEALED_KEY_PUBLIC" -C "$OBJECT_CONTEXT" >/dev/null
+    tpm2_unseal -c "$OBJECT_CONTEXT" -o "$KEYFILE" -L "$PCRS" >/dev/null
     retval=$?
     rm -f "$OBJECT_CONTEXT"
     return $retval
@@ -177,17 +176,19 @@ unseal_key() {
 
 # Seal a key to the TPM
 seal_key() {
-  tpm2_createpolicy -Q -P -L "$PCRS" -f "$POLICY_DIGEST"
+  if ! tpm2_createpolicy -P -L "$PCRS" -f "$POLICY_DIGEST" >/dev/null; then
+    return 1
+  fi
 
   if use_nvram; then
     echo "Storing key in TPM NVRAM..."
-    tpm2_nvrelease -Q -x "$NVRAM_HANDLE" -a 0x40000001 >/dev/null 2>&1
-    tpm2_nvdefine -Q -x "$NVRAM_HANDLE" -a 0x40000001 -L "$POLICY_DIGEST" -s $KEY_SIZE -t "policyread|policywrite"
-    tpm2_nvwrite -Q -x "$NVRAM_HANDLE" -a "$NVRAM_HANDLE" -L "$PCRS" "$KEYFILE"
+    tpm2_nvrelease -x "$NVRAM_INDEX" -a 0x40000001 >/dev/null 2>&1
+    tpm2_nvdefine -x "$NVRAM_INDEX" -a 0x40000001 -L "$POLICY_DIGEST" -s $KEY_SIZE -t "policyread|policywrite" >/dev/null
+    tpm2_nvwrite -x "$NVRAM_INDEX" -a "$NVRAM_INDEX" -L "$PCRS" "$KEYFILE" >/dev/null
   else
     echo "Sealing keyfile with the TPM..."
-    rm -f "$SEALED_KEYFILE_PRIVATE" "$SEALED_KEYFILE_PUBLIC"
-    tpm2_create -Q -H "$PARENT_HANDLE" -g sha256 -G keyedhash -A 0x492 -I "$KEYFILE" -L "$POLICY_DIGEST" -r "$SEALED_KEYFILE_PRIVATE" -u "$SEALED_KEYFILE_PUBLIC"
+    rm -f "$SEALED_KEY_PRIVATE" "$SEALED_KEY_PUBLIC"
+    tpm2_create -H "$PARENT_HANDLE" -g sha256 -G keyedhash -A 0x492 -I "$KEYFILE" -L "$POLICY_DIGEST" -r "$SEALED_KEY_PRIVATE" -u "$SEALED_KEY_PUBLIC" >/dev/null
   fi
   retval=$?
 
@@ -197,7 +198,7 @@ seal_key() {
 
 # Determine if we are using NVRAM for key storage
 use_nvram() {
-  [ -n "$NVRAM_HANDLE" ]
+  [ -n "$NVRAM_INDEX" ]
 }
 
 # Generate a random key of KEY_SIZE bytes
@@ -208,16 +209,15 @@ generate_keyfile() {
 # Set default config values and load configuration file
 load_defaults() {
   TMPFS_MOUNT=/root/keyfs
-  SEALED_KEYFILE_PUBLIC=/boot/keyfile.pub
-  SEALED_KEYFILE_PRIVATE=/boot/keyfile.priv
+  SEALED_KEY_PUBLIC=/boot/keyfile.pub
+  SEALED_KEY_PRIVATE=/boot/keyfile.priv
   PARENT_HANDLE="0x81000001"
-  NVRAM_HANDLE=""
+  NVRAM_INDEX=""
   KEY_SIZE=32
   TPM_KEY_SLOT=1
   RESET_KEY_SLOT=2
   PCRS="sha1:0,2,4,7"
   TPM2TOOLS_TCTI="device:/dev/tpmrm0"
-  TPM2TOOLS_TCTI_NAME="$TPM2TOOLS_TCTI"
 
   if [ -z "$CONFFILE" ]; then
     CONFFILE=/etc/default/luks-tpm2
@@ -234,6 +234,9 @@ parse_args() {
   while getopts ":hm:p:H:x:s:t:r:L:T:" opt; do
     case $opt in
       h)
+        echo "luks-tpm2 0.1.0"
+        echo "Manage TPM 2.0 sealed LUKS keys on DEVICE"
+        echo
         usage
         exit 0
         ;;
@@ -241,14 +244,14 @@ parse_args() {
         TMPFS_MOUNT="$OPTARG"
         ;;
       p)
-        SEALED_KEYFILE_PUBLIC="$OPTARG.pub"
-        SEALED_KEYFILE_PRIVATE="$OPTARG.priv"
+        SEALED_KEY_PUBLIC="$OPTARG.pub"
+        SEALED_KEY_PRIVATE="$OPTARG.priv"
         ;;
       H)
         PARENT_HANDLE="$OPTARG"
         ;;
       x)
-        NVRAM_HANDLE="$OPTARG"
+        NVRAM_INDEX="$OPTARG"
         ;;
       s)
         if [[ ! $OPTARG =~ ^-?[0-9]+$ ]]; then
@@ -276,7 +279,6 @@ parse_args() {
         ;;
       T)
         TPM2TOOLS_TCTI="$OPTARG"
-        TPM2TOOLS_TCTI_NAME="$OPTARG"
         ;;
       \?)
         echo "Invalid option: -$OPTARG" >&2
@@ -314,25 +316,26 @@ parse_args() {
 
 # Set addtional global and environment variables
 init_globals() {
-  export TPM2TOOLS_TCTI
-  export TPM2TOOLS_TCTI_NAME
-
   KEYFILE="$TMPFS_MOUNT/keyfile"
   POLICY_DIGEST="$TMPFS_MOUNT/policy.digest"
   OBJECT_CONTEXT="$TMPFS_MOUNT/object.context"
   RETURN_CODE=0
+  TPM2TOOLS_TCTI_NAME="$TPM2TOOLS_TCTI"
+
+  export TPM2TOOLS_TCTI
+  export TPM2TOOLS_TCTI_NAME
 }
 
 # Main entry point
 main() {
+  load_defaults
+  parse_args "$@"
+  init_globals
+
   if [ $EUID -ne 0 ]; then
     echo "Must be run as root" >&2
     exit 2
   fi
-
-  load_defaults
-  parse_args "$@"
-  init_globals
 
   create_tmpfs
   $ACTION

@@ -86,6 +86,14 @@ Usage
     -T STRING  TCTI module used to communicate with the TPM
                Default: device:/dev/tpmrm0
 
+### Default configuration
+
+The script will read default configuration values by sourcing
+`/etc/default/luks-tpm2` if it exists. The location of this file can changed by
+setting the `CONFFILE` environment variable. Variables read from the config
+file will override hard coded defaults, but will not override command line
+arguments.
+
 How-to
 ------
 
