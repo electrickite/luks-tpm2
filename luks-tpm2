@@ -1,6 +1,7 @@
 #!/bin/bash
 
-# Copyright 2018 Corey Hinshaw <coreyhinshaw@gmail.com>
+# luks-tpm2 -- Manage TPM 2.0 sealed LUKS keys
+# Copyright (C) 2018 Corey Hinshaw <coreyhinshaw@gmail.com>
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -50,6 +51,7 @@ Options:
 EOF
 }
 
+# Create an initial LUKS key in TPM_KEY_SLOT sealed by the TPM
 init_tpm_key() {
   echo "WARNING: This will permanently delete the LUKS key in slot $TPM_KEY_SLOT!"
   read -p "Do you wish to proceed? [Y/n] " choice
@@ -80,6 +82,7 @@ init_tpm_key() {
   fi
 }
 
+# Set a temporary LUKS passphrase in RESET_KEY_SLOT
 add_temp_key() {
   unseal_key
 
@@ -94,6 +97,7 @@ add_temp_key() {
   fi
 }
 
+# Reset the TPM LUKS key and remove the temporary passphrase
 reset_tpm_key() {
   read -s -p "Enter any existing LUKS passphrase: " PASSPHRASE
   echo
@@ -121,6 +125,7 @@ reset_tpm_key() {
   fi
 }
 
+# Reaplce the LUKS TPM key with a new value
 replace_tpm_key() {
   original_keyfile="$KEYFILE.orig"
   unseal_key
@@ -140,6 +145,7 @@ replace_tpm_key() {
   fi
 }
 
+# Create a temporary in-memory file system to store key files
 create_tmpfs() {
   mkdir -p "$TMPFS_MOUNT"
   if ! mount tmpfs "$TMPFS_MOUNT" -t tmpfs -o size=1m; then
@@ -149,10 +155,12 @@ create_tmpfs() {
   chmod 700 "$TMPFS_MOUNT"
 }
 
+# Remove the temporary in-memory file system
 destroy_tmpfs() {
   umount "$TMPFS_MOUNT"
 }
 
+# Unseal a key using the TPM
 unseal_key() {
   if use_nvram; then
     echo "Reading key from TPM NVRAM..."
@@ -167,6 +175,7 @@ unseal_key() {
   fi
 }
 
+# Seal a key to the TPM
 seal_key() {
   tpm2_createpolicy -Q -P -L "$PCRS" -f "$POLICY_DIGEST"
 
@@ -186,119 +195,152 @@ seal_key() {
   return $retval
 }
 
+# Determine if we are using NVRAM for key storage
 use_nvram() {
   [ -n "$NVRAM_HANDLE" ]
 }
 
+# Generate a random key of KEY_SIZE bytes
 generate_keyfile() {
   dd bs=$KEY_SIZE count=1 if=/dev/urandom of="$KEYFILE" >/dev/null 2>&1
 }
 
-ORIGINAL_ARGS="$@"
-TMPFS_MOUNT=/root/keyfs
-SEALED_KEYFILE_PUBLIC=/boot/keyfile.pub
-SEALED_KEYFILE_PRIVATE=/boot/keyfile.priv
-PARENT_HANDLE="0x81000001"
-NVRAM_HANDLE=""
-KEY_SIZE=32
-TPM_KEY_SLOT=1
-RESET_KEY_SLOT=2
-PCRS="sha1:0,2,4,7"
+# Set default config values and load configuration file
+load_defaults() {
+  TMPFS_MOUNT=/root/keyfs
+  SEALED_KEYFILE_PUBLIC=/boot/keyfile.pub
+  SEALED_KEYFILE_PRIVATE=/boot/keyfile.priv
+  PARENT_HANDLE="0x81000001"
+  NVRAM_HANDLE=""
+  KEY_SIZE=32
+  TPM_KEY_SLOT=1
+  RESET_KEY_SLOT=2
+  PCRS="sha1:0,2,4,7"
+  TPM2TOOLS_TCTI="device:/dev/tpmrm0"
+  TPM2TOOLS_TCTI_NAME="$TPM2TOOLS_TCTI"
 
-export TPM2TOOLS_TCTI="device:/dev/tpmrm0"
-export TPM2TOOLS_TCTI_NAME="device:/dev/tpmrm0"
+  if [ -z "$CONFFILE" ]; then
+    CONFFILE=/etc/default/luks-tpm2
+  fi
+  if [ -r "$CONFFILE" ]; then
+    source "$CONFFILE"
+  fi
+}
 
-while getopts ":hm:p:H:x:s:t:r:L:T:" opt; do
-  case $opt in
-    h)
-      usage
-      exit 0
-      ;;
-    m)
-      TMPFS_MOUNT="$OPTARG"
-      ;;
-    p)
-      SEALED_KEYFILE_PUBLIC="$OPTARG.pub"
-      SEALED_KEYFILE_PRIVATE="$OPTARG.priv"
-      ;;
-    H)
-      PARENT_HANDLE="$OPTARG"
-      ;;
-    x)
-      NVRAM_HANDLE="$OPTARG"
-      ;;
-    s)
-      if [[ ! $OPTARG =~ ^-?[0-9]+$ ]]; then
-        echo "Invalid key size: $OPTARG" >&2
+# Parse command line arguments
+parse_args() {
+  ORIGINAL_ARGS="$@"
+
+  while getopts ":hm:p:H:x:s:t:r:L:T:" opt; do
+    case $opt in
+      h)
+        usage
+        exit 0
+        ;;
+      m)
+        TMPFS_MOUNT="$OPTARG"
+        ;;
+      p)
+        SEALED_KEYFILE_PUBLIC="$OPTARG.pub"
+        SEALED_KEYFILE_PRIVATE="$OPTARG.priv"
+        ;;
+      H)
+        PARENT_HANDLE="$OPTARG"
+        ;;
+      x)
+        NVRAM_HANDLE="$OPTARG"
+        ;;
+      s)
+        if [[ ! $OPTARG =~ ^-?[0-9]+$ ]]; then
+          echo "Invalid key size: $OPTARG" >&2
+          exit 1
+        fi
+        TPM_KEY_SLOT=$OPTARG
+        ;;
+      t)
+        if [[ ! $OPTARG =~ ^-?[0-9]+$ ]] || [ $OPTARG -lt 0 ] || [ $OPTARG -gt 7 ]; then
+          echo "Invalid TPM key slot: $OPTARG" >&2
+          exit 1
+        fi
+        TPM_KEY_SLOT=$OPTARG
+        ;;
+      r)
+        if [[ ! $OPTARG =~ ^-?[0-9]+$ ]] || [ $OPTARG -lt 0 ] || [ $OPTARG -gt 7 ]; then
+          echo "Invalid reset key slot: $OPTARG" >&2
+          exit 1
+        fi
+        RESET_KEY_SLOT=$OPTARG
+        ;;
+      L)
+        PCRS="$OPTARG"
+        ;;
+      T)
+        TPM2TOOLS_TCTI="$OPTARG"
+        TPM2TOOLS_TCTI_NAME="$OPTARG"
+        ;;
+      \?)
+        echo "Invalid option: -$OPTARG" >&2
+        usage >&2
         exit 1
-      fi
-      TPM_KEY_SLOT=$OPTARG
-      ;;
-    t)
-      if [[ ! $OPTARG =~ ^-?[0-9]+$ ]] || [ $OPTARG -lt 0 ] || [ $OPTARG -gt 7 ]; then
-        echo "Invalid TPM key slot: $OPTARG" >&2
+        ;;
+      :)
+        echo "Option -$OPTARG requires an argument." >&2
         exit 1
-      fi
-      TPM_KEY_SLOT=$OPTARG
-      ;;
-    r)
-      if [[ ! $OPTARG =~ ^-?[0-9]+$ ]] || [ $OPTARG -lt 0 ] || [ $OPTARG -gt 7 ]; then
-        echo "Invalid reset key slot: $OPTARG" >&2
-        exit 1
-      fi
-      RESET_KEY_SLOT=$OPTARG
-      ;;
-    L)
-      PCRS="$OPTARG"
-      ;;
-    T)
-      export TPM2TOOLS_TCTI="$OPTARG"
-      export TPM2TOOLS_TCTI_NAME="$OPTARG"
-      ;;
-    \?)
-      echo "Invalid option: -$OPTARG" >&2
+        ;;
+    esac
+  done
+
+  shift $((OPTIND-1))
+
+  ROOT_DEVICE="$1"
+  if [ -z $ROOT_DEVICE ]; then
+    echo "Device not specified!" >&2
+    usage >&2
+    exit 1
+  fi
+
+  case "$2" in
+    init) ACTION=init_tpm_key;;
+    temp) ACTION=add_temp_key;;
+    reset) ACTION=reset_tpm_key;;
+    replace) ACTION=replace_tpm_key;;
+    *)
+      echo "Invalid action!" >&2
       usage >&2
       exit 1
       ;;
-    :)
-      echo "Option -$OPTARG requires an argument." >&2
-      exit 1
-      ;;
   esac
-done
+}
 
-shift $((OPTIND-1))
+# Set addtional global and environment variables
+init_globals() {
+  export TPM2TOOLS_TCTI
+  export TPM2TOOLS_TCTI_NAME
 
-ROOT_DEVICE="$1"
-KEYFILE="$TMPFS_MOUNT/keyfile"
-POLICY_DIGEST="$TMPFS_MOUNT/policy.digest"
-OBJECT_CONTEXT="$TMPFS_MOUNT/object.context"
-RETURN_CODE=0
+  KEYFILE="$TMPFS_MOUNT/keyfile"
+  POLICY_DIGEST="$TMPFS_MOUNT/policy.digest"
+  OBJECT_CONTEXT="$TMPFS_MOUNT/object.context"
+  RETURN_CODE=0
+}
 
-if [ -z $ROOT_DEVICE ]; then
-  echo "Device not specified!" >&2
-  usage >&2
-  exit 1
-fi
+# Main entry point
+main() {
+  if [ $EUID -ne 0 ]; then
+    echo "Must be run as root" >&2
+    exit 2
+  fi
 
-if [ $EUID -ne 0 ]; then
-  echo "Must be run as root" >&2
-  exit 2
-fi
+  load_defaults
+  parse_args "$@"
+  init_globals
 
-case "$2" in
-  init) ACTION=init_tpm_key;;
-  temp) ACTION=add_temp_key;;
-  reset) ACTION=reset_tpm_key;;
-  replace) ACTION=replace_tpm_key;;
-  *)
-    echo "Invalid action!" >&2
-    usage >&2
-    exit 1
-    ;;
-esac
+  create_tmpfs
+  $ACTION
+  destroy_tmpfs
 
-create_tmpfs
-$ACTION
-destroy_tmpfs
-exit $RETURN_CODE
+  exit $RETURN_CODE
+}
+
+main "$@"
+
+# vim:set ts=2 sw=2 et:
