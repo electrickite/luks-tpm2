@@ -18,7 +18,7 @@
 
 usage() {
   cat <<EOF
-Usage: luks-tpm2 [OPTION]... DEVICE ACTION
+Usage: luks-tpm2 [OPTION]... [DEVICE] ACTION
 
 Actions:
   init       Initialize the LUKS TPM key slot
@@ -52,7 +52,8 @@ EOF
 
 # Create an initial LUKS key in TPM_KEY_SLOT sealed by the TPM
 init_tpm_key() {
-  echo "WARNING: This will permanently delete the LUKS key in slot $TPM_KEY_SLOT!"
+  echo "Initializing LUKS TPM key for $ROOT_DEVICE"
+  echo "WARNING: This will permanently delete the key in slot $TPM_KEY_SLOT!"
   read -p "Do you wish to proceed? [Y/n] " choice
   if [ "$choice" != "y" ] && [ "$choice" != "Y" ]; then
     RETURN_CODE=0
@@ -85,7 +86,7 @@ init_tpm_key() {
 add_temp_key() {
   unseal_key
 
-  echo "Preparing to set a temporary LUKS passphrase..."
+  echo "Preparing to set a temporary LUKS passphrase for $ROOT_DEVICE..."
   if cryptsetup luksAddKey --key-slot $RESET_KEY_SLOT --key-file "$KEYFILE" $ROOT_DEVICE < /dev/tty; then
     echo "After booting into the current kernel, run"
     echo "  luks-tpm2 $(echo $ORIGINAL_ARGS | sed 's/temp$/reset/')"
@@ -98,10 +99,9 @@ add_temp_key() {
 
 # Reset the TPM LUKS key and remove the temporary passphrase
 reset_tpm_key() {
-  read -s -p "Enter any existing LUKS passphrase: " PASSPHRASE
+  read -s -p "Enter any existing LUKS passphrase for $ROOT_DEVICE: " PASSPHRASE
   echo
 
-  echo "Generating new LUKS key..."
   generate_keyfile
 
   echo "Removing current TPM key from slot $TPM_KEY_SLOT..."
@@ -132,7 +132,7 @@ replace_tpm_key() {
 
   generate_keyfile
 
-  echo "Replacing LUKS key in slot $TPM_KEY_SLOT..."
+  echo "Replacing LUKS key in slot $TPM_KEY_SLOT on $ROOT_DEVICE..."
   if cryptsetup luksChangeKey $ROOT_DEVICE "$KEYFILE" --key-slot $TPM_KEY_SLOT --key-file "$original_keyfile"; then
     if ! seal_key; then
       echo "There was an error sealing the new keyfile!" >&2
@@ -206,6 +206,11 @@ generate_keyfile() {
   dd bs=$KEY_SIZE count=1 if=/dev/urandom of="$KEYFILE" >/dev/null 2>&1
 }
 
+# Find first LUKS boock device
+find_luks_device() {
+  lsblk -pfln -o NAME,FSTYPE | grep crypto_LUKS | head -1 | cut -f1 -d' '
+}
+
 # Set default config values and load configuration file
 load_defaults() {
   TMPFS_MOUNT=/root/keyfs
@@ -234,7 +239,7 @@ parse_args() {
   while getopts ":hm:p:H:x:s:t:r:L:T:" opt; do
     case $opt in
       h)
-        echo "luks-tpm2 0.1.0"
+        echo "luks-tpm2 0.2.0"
         echo "Manage TPM 2.0 sealed LUKS keys on DEVICE"
         echo
         usage
@@ -294,14 +299,26 @@ parse_args() {
 
   shift $((OPTIND-1))
 
-  ROOT_DEVICE="$1"
+  if [ -n "$2" ]; then
+    ROOT_DEVICE="$1"
+    ACTION="$2"
+  elif [ -n "$1" ]; then
+    ACTION="$1"
+  fi
+}
+
+# Set addtional global and environment variables
+init_globals() {
   if [ -z $ROOT_DEVICE ]; then
-    echo "Device not specified!" >&2
+    ROOT_DEVICE="$(find_luks_device)"
+  fi
+  if [ -z $ROOT_DEVICE ]; then
+    echo "LUKS device not found!" >&2
     usage >&2
     exit 1
   fi
 
-  case "$2" in
+  case "$ACTION" in
     init) ACTION=init_tpm_key;;
     temp) ACTION=add_temp_key;;
     reset) ACTION=reset_tpm_key;;
@@ -312,10 +329,7 @@ parse_args() {
       exit 1
       ;;
   esac
-}
 
-# Set addtional global and environment variables
-init_globals() {
   KEYFILE="$TMPFS_MOUNT/keyfile"
   POLICY_DIGEST="$TMPFS_MOUNT/policy.digest"
   OBJECT_CONTEXT="$TMPFS_MOUNT/object.context"

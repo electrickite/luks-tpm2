@@ -1,4 +1,8 @@
+luks-tpm2 0.2.0
+---------------
+* Allow default action and device
+* Add default LUKS device detection
+
 luks-tpm2 0.1.0
 ---------------
-
 * Initial release

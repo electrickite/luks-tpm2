@@ -94,6 +94,11 @@ setting the `CONFFILE` environment variable. Variables read from the config
 file will override hard coded defaults, but will not override command line
 arguments.
 
+### LUKS device detection
+
+If the path to a LUKS block device is not provided `luks-tpm2` will use the
+first device with a `crypto_LUKS` filesystem.
+
 How-to
 ------
 

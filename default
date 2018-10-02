@@ -14,6 +14,8 @@
 # RESET_KEY_SLOT       LUKS slot number for temporary reset passphrase
 # PCRS                 TPM2-Tools PCR bank selection list
 # TPM2TOOLS_TCTI       TPM2-Tools TCTI identifier
+# ROOT_DEVICE          The LUKS block device path
+# ACTION               The default command action
 
 #TMPFS_MOUNT="/root/keyfs"
 #SEALED_KEY_PUBLIC="/boot/keyfile.pub"
