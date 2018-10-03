@@ -1,3 +1,7 @@
+luks-tpm2 0.2.1
+---------------
+* Clear temporary passphrase slot before setting
+
 luks-tpm2 0.2.0
 ---------------
 * Allow default action and device

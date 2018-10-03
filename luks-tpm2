@@ -87,6 +87,8 @@ add_temp_key() {
   unseal_key
 
   echo "Preparing to set a temporary LUKS passphrase for $ROOT_DEVICE..."
+  cryptsetup luksKillSlot --key-file "$KEYFILE" $ROOT_DEVICE $RESET_KEY_SLOT
+
   if cryptsetup luksAddKey --key-slot $RESET_KEY_SLOT --key-file "$KEYFILE" $ROOT_DEVICE < /dev/tty; then
     echo "After booting into the current kernel, run"
     echo "  luks-tpm2 $(echo $ORIGINAL_ARGS | sed 's/temp$/reset/')"
@@ -239,7 +241,7 @@ parse_args() {
   while getopts ":hm:p:H:x:s:t:r:L:T:" opt; do
     case $opt in
       h)
-        echo "luks-tpm2 0.2.0"
+        echo "luks-tpm2 0.2.1"
         echo "Manage TPM 2.0 sealed LUKS keys on DEVICE"
         echo
         usage
