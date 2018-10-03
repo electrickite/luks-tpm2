@@ -1,3 +1,7 @@
+luks-tpm2 0.2.2
+---------------
+* Do not output kill slot errors during temp action
+
 luks-tpm2 0.2.1
 ---------------
 * Clear temporary passphrase slot before setting
