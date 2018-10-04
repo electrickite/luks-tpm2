@@ -1,3 +1,7 @@
+luks-tpm2 0.4.0
+---------------
+* Prompt for owner or parent passwords when unsealing
+
 luks-tpm2 0.3.0
 ---------------
 * Add option to specify PCR bank for unsealing

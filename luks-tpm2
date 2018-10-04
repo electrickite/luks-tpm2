@@ -186,13 +186,29 @@ seal_key() {
 
   if use_nvram; then
     echo "Storing key in TPM NVRAM..."
-    tpm2_nvrelease -x "$NVRAM_INDEX" -a 0x40000001 >/dev/null 2>&1
-    tpm2_nvdefine -x "$NVRAM_INDEX" -a 0x40000001 -L "$POLICY_DIGEST" -s $KEY_SIZE -t "policyread|policywrite" >/dev/null
+    nvout=$(tpm2_nvrelease -x "$NVRAM_INDEX" -a 0x40000001 2>&1)
+    if echo "$nvout" | grep -sqiE 'Error.*0x9a2'; then
+      read -s -p "Enter TPM owner password: " tpm_auth_pass
+      echo
+      [ -n "$tpm_auth_pass" ] && tpm_auth_pass="-P $tpm_auth_pass"
+
+      tpm2_nvrelease -x "$NVRAM_INDEX" -a 0x40000001 $tpm_auth_pass >/dev/null 2>&1
+    fi
+
+    tpm2_nvdefine -x "$NVRAM_INDEX" -a 0x40000001 $tpm_auth_pass -L "$POLICY_DIGEST" -s $KEY_SIZE -t "policyread|policywrite" >/dev/null
     tpm2_nvwrite -x "$NVRAM_INDEX" -a "$NVRAM_INDEX" -L "$PCRS" "$KEYFILE" >/dev/null
   else
     echo "Sealing keyfile with the TPM..."
     rm -f "$SEALED_KEY_PRIVATE" "$SEALED_KEY_PUBLIC"
-    tpm2_create -H "$PARENT_HANDLE" -g sha256 -G keyedhash -A 0x492 -I "$KEYFILE" -L "$POLICY_DIGEST" -r "$SEALED_KEY_PRIVATE" -u "$SEALED_KEY_PUBLIC" >/dev/null
+
+    createout=$(tpm2_create -H "$PARENT_HANDLE" -g sha256 -G keyedhash -A 0x492 -I "$KEYFILE" -L "$POLICY_DIGEST" -r "$SEALED_KEY_PRIVATE" -u "$SEALED_KEY_PUBLIC" 2>&1)
+    if echo "$createout" | grep -sqiE 'Error.*0x9a2'; then
+      read -s -p "Enter parent key password: " tpm_auth_pass
+      echo
+      [ -n "$tpm_auth_pass" ] && tpm_auth_pass="-P $tpm_auth_pass"
+
+      tpm2_create -H "$PARENT_HANDLE" -g sha256 -G keyedhash -A 0x492 $tpm_auth_pass -I "$KEYFILE" -L "$POLICY_DIGEST" -r "$SEALED_KEY_PRIVATE" -u "$SEALED_KEY_PUBLIC" >/dev/null
+    fi
   fi
   retval=$?
 
@@ -244,7 +260,7 @@ parse_args() {
   while getopts ":hm:p:H:x:s:t:r:L:l:T:" opt; do
     case $opt in
       h)
-        echo "luks-tpm2 0.3.0"
+        echo "luks-tpm2 0.4.0"
         echo "Manage TPM 2.0 sealed LUKS keys on DEVICE"
         echo
         usage
