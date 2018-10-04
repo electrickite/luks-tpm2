@@ -45,6 +45,8 @@ Options:
              Default: 2
   -L STRING  List of PCR banks used to seal LUKS key
              Default: sha1:0,2,4,7
+  -l STRING  List of PCR banks used to unseal LUKS key
+             Default: <value of -L>
   -T STRING  TCTI module used to communicate with the TPM
              Default: device:/dev/tpmrm0
 EOF
@@ -165,11 +167,11 @@ destroy_tmpfs() {
 unseal_key() {
   if use_nvram; then
     echo "Reading key from TPM NVRAM..."
-    tpm2_nvread -x $NVRAM_INDEX -a $NVRAM_INDEX -L "$PCRS" -f "$KEYFILE" >/dev/null
+    tpm2_nvread -x $NVRAM_INDEX -a $NVRAM_INDEX -L "$UNSEAL_PCRS" -f "$KEYFILE" >/dev/null
   else
     echo "Usealing keyfile..."
     tpm2_load -H $PARENT_HANDLE -r "$SEALED_KEY_PRIVATE" -u "$SEALED_KEY_PUBLIC" -C "$OBJECT_CONTEXT" >/dev/null
-    tpm2_unseal -c "$OBJECT_CONTEXT" -o "$KEYFILE" -L "$PCRS" >/dev/null
+    tpm2_unseal -c "$OBJECT_CONTEXT" -o "$KEYFILE" -L "$UNSEAL_PCRS" >/dev/null
     retval=$?
     rm -f "$OBJECT_CONTEXT"
     return $retval
@@ -224,6 +226,7 @@ load_defaults() {
   TPM_KEY_SLOT=1
   RESET_KEY_SLOT=2
   PCRS="sha1:0,2,4,7"
+  UNSEAL_PCRS=""
   TPM2TOOLS_TCTI="device:/dev/tpmrm0"
 
   if [ -z "$CONFFILE" ]; then
@@ -238,10 +241,10 @@ load_defaults() {
 parse_args() {
   ORIGINAL_ARGS="$@"
 
-  while getopts ":hm:p:H:x:s:t:r:L:T:" opt; do
+  while getopts ":hm:p:H:x:s:t:r:L:l:T:" opt; do
     case $opt in
       h)
-        echo "luks-tpm2 0.2.2"
+        echo "luks-tpm2 0.3.0"
         echo "Manage TPM 2.0 sealed LUKS keys on DEVICE"
         echo
         usage
@@ -283,6 +286,9 @@ parse_args() {
         ;;
       L)
         PCRS="$OPTARG"
+        ;;
+      l)
+        UNSEAL_PCRS="$OPTARG"
         ;;
       T)
         TPM2TOOLS_TCTI="$OPTARG"
@@ -331,6 +337,10 @@ init_globals() {
       exit 1
       ;;
   esac
+
+  if [ -z "$UNSEAL_PCRS" ]; then
+    UNSEAL_PCRS="$PCRS"
+  fi
 
   KEYFILE="$TMPFS_MOUNT/keyfile"
   POLICY_DIGEST="$TMPFS_MOUNT/policy.digest"
