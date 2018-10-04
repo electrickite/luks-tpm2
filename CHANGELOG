@@ -1,3 +1,7 @@
+luks-tpm2 0.3.0
+---------------
+* Add option to specify PCR bank for unsealing
+
 luks-tpm2 0.2.2
 ---------------
 * Do not output kill slot errors during temp action
