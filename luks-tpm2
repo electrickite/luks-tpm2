@@ -149,9 +149,9 @@ replace_tpm_key() {
 }
 
 # Create a temporary in-memory file system to store key files
-create_tmpfs() {
+create_ramfs() {
   mkdir -p "$TMPFS_MOUNT"
-  if ! mount tmpfs "$TMPFS_MOUNT" -t tmpfs -o size=1m; then
+  if ! mount ramfs "$TMPFS_MOUNT" -t ramfs -o size=1m; then
     echo "Could not create tmpfs. Aborting..." >&2
     exit 3
   fi
@@ -159,7 +159,11 @@ create_tmpfs() {
 }
 
 # Remove the temporary in-memory file system
-destroy_tmpfs() {
+destroy_ramfs() {
+  if [ -f "$KEYFILE" ]; then
+    dd if=/dev/urandom of="$KEYFILE" bs=$(stat --printf="%s" "$KEYFILE") count=1 conv=notrunc >/dev/null 2>&1
+    rm -f "$KEYFILE"
+  fi
   umount "$TMPFS_MOUNT"
 }
 
@@ -260,7 +264,7 @@ parse_args() {
   while getopts ":hm:p:H:x:s:t:r:L:l:T:" opt; do
     case $opt in
       h)
-        echo "luks-tpm2 0.4.0"
+        echo "luks-tpm2 0.5.0"
         echo "Manage TPM 2.0 sealed LUKS keys on DEVICE"
         echo
         usage
@@ -379,9 +383,9 @@ main() {
     exit 2
   fi
 
-  create_tmpfs
+  create_ramfs
   $ACTION
-  destroy_tmpfs
+  destroy_ramfs
 
   exit $RETURN_CODE
 }

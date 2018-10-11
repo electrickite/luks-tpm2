@@ -1,3 +1,8 @@
+luks-tpm2 0.5.0
+---------------
+* Securely delete keyfile
+* Use ramfs instead of tmpfs
+
 luks-tpm2 0.4.0
 ---------------
 * Prompt for owner or parent passwords when unsealing
