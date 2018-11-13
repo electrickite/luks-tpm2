@@ -247,7 +247,7 @@ load_defaults() {
   RESET_KEY_SLOT=2
   PCRS="sha1:0,2,4,7"
   UNSEAL_PCRS=""
-  TPM2TOOLS_TCTI="device:/dev/tpmrm0"
+  TPM2TOOLS_ENV_TCTI="device:/dev/tpmrm0"
 
   if [ -z "$CONFFILE" ]; then
     CONFFILE=/etc/default/luks-tpm2
@@ -264,7 +264,7 @@ parse_args() {
   while getopts ":hm:p:H:x:s:t:r:L:l:T:" opt; do
     case $opt in
       h)
-        echo "luks-tpm2 0.5.0"
+        echo "luks-tpm2 0.6.0"
         echo "Manage TPM 2.0 sealed LUKS keys on DEVICE"
         echo
         usage
@@ -311,7 +311,7 @@ parse_args() {
         UNSEAL_PCRS="$OPTARG"
         ;;
       T)
-        TPM2TOOLS_TCTI="$OPTARG"
+        TPM2TOOLS_ENV_TCTI="$OPTARG"
         ;;
       \?)
         echo "Invalid option: -$OPTARG" >&2
@@ -366,10 +366,8 @@ init_globals() {
   POLICY_DIGEST="$TMPFS_MOUNT/policy.digest"
   OBJECT_CONTEXT="$TMPFS_MOUNT/object.context"
   RETURN_CODE=0
-  TPM2TOOLS_TCTI_NAME="$TPM2TOOLS_TCTI"
 
-  export TPM2TOOLS_TCTI
-  export TPM2TOOLS_TCTI_NAME
+  export TPM2TOOLS_ENV_TCTI
 }
 
 # Main entry point

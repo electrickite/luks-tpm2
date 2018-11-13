@@ -14,7 +14,7 @@
 # RESET_KEY_SLOT       LUKS slot number for temporary reset passphrase
 # PCRS                 TPM2-Tools PCR bank selection list used to seal key
 # UNSEAL_PCRS          TPM2-Tools PCR bank selection list used to unseal key
-# TPM2TOOLS_TCTI       TPM2-Tools TCTI identifier
+# TPM2TOOLS_ENV_TCTI   TPM2-Tools TCTI identifier
 # ROOT_DEVICE          The LUKS block device path
 # ACTION               The default command action
 
@@ -28,4 +28,4 @@
 #RESET_KEY_SLOT=2
 #PCRS="sha1:0,2,4,7"
 #UNSEAL_PCRS="sha1:0,2,4,7"
-#TPM2TOOLS_TCTI="device:/dev/tpmrm0"
+#TPM2TOOLS_ENV_TCTI="device:/dev/tpmrm0"

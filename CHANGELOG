@@ -1,3 +1,7 @@
+luks-tpm2 0.6.0
+---------------
+* Incorporate tpm2-tools environment variable change
+
 luks-tpm2 0.5.0
 ---------------
 * Securely delete keyfile
