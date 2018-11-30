@@ -1,3 +1,8 @@
+luks-tpm2 0.7.0
+---------------
+* Fix for tpm2-tools TCTI configuration regression
+* Add version option
+
 luks-tpm2 0.6.0
 ---------------
 * Incorporate tpm2-tools environment variable change

@@ -16,6 +16,10 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+version() {
+  echo "luks-tpm2 0.7.0"
+}
+
 usage() {
   cat <<EOF
 Usage: luks-tpm2 [OPTION]... [DEVICE] ACTION
@@ -28,6 +32,7 @@ Actions:
 
 Options:
   -h         Print this help text
+  -v         Print version information
   -m PATH    Mount point for the tmpfs file system used to store TPM keyfiles
              Default: /root/keyfs
   -p PATH    Sealed keyfile path
@@ -261,13 +266,17 @@ load_defaults() {
 parse_args() {
   ORIGINAL_ARGS="$@"
 
-  while getopts ":hm:p:H:x:s:t:r:L:l:T:" opt; do
+  while getopts ":hvm:p:H:x:s:t:r:L:l:T:" opt; do
     case $opt in
       h)
-        echo "luks-tpm2 0.6.0"
+        version
         echo "Manage TPM 2.0 sealed LUKS keys on DEVICE"
         echo
         usage
+        exit 0
+        ;;
+      v)
+        version
         exit 0
         ;;
       m)
@@ -367,7 +376,16 @@ init_globals() {
   OBJECT_CONTEXT="$TMPFS_MOUNT/object.context"
   RETURN_CODE=0
 
+  IFS=: read TPM2TOOLS_TCTI_NAME TPM2TOOLS_DEVICE_FILE <<EOF
+$TPM2TOOLS_ENV_TCTI
+EOF
+  unset IFS
+
   export TPM2TOOLS_ENV_TCTI
+  export TPM2TOOLS_TCTI_NAME
+  if [ -n "$TPM2TOOLS_DEVICE_FILE" ]; then
+    export TPM2TOOLS_DEVICE_FILE
+  fi
 }
 
 # Main entry point
