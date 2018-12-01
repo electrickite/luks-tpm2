@@ -17,7 +17,7 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 version() {
-  echo "luks-tpm2 0.7.0"
+  echo "luks-tpm2 1.0.0"
 }
 
 usage() {
@@ -252,7 +252,7 @@ load_defaults() {
   RESET_KEY_SLOT=2
   PCRS="sha1:0,2,4,7"
   UNSEAL_PCRS=""
-  TPM2TOOLS_ENV_TCTI="device:/dev/tpmrm0"
+  TPM2TOOLS_TCTI="device:/dev/tpmrm0"
 
   if [ -z "$CONFFILE" ]; then
     CONFFILE=/etc/default/luks-tpm2
@@ -320,7 +320,7 @@ parse_args() {
         UNSEAL_PCRS="$OPTARG"
         ;;
       T)
-        TPM2TOOLS_ENV_TCTI="$OPTARG"
+        TPM2TOOLS_TCTI="$OPTARG"
         ;;
       \?)
         echo "Invalid option: -$OPTARG" >&2
@@ -377,11 +377,11 @@ init_globals() {
   RETURN_CODE=0
 
   IFS=: read TPM2TOOLS_TCTI_NAME TPM2TOOLS_DEVICE_FILE <<EOF
-$TPM2TOOLS_ENV_TCTI
+$TPM2TOOLS_TCTI
 EOF
   unset IFS
 
-  export TPM2TOOLS_ENV_TCTI
+  export TPM2TOOLS_TCTI
   export TPM2TOOLS_TCTI_NAME
   if [ -n "$TPM2TOOLS_DEVICE_FILE" ]; then
     export TPM2TOOLS_DEVICE_FILE
