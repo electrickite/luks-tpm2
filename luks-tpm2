@@ -178,7 +178,7 @@ unseal_key() {
     echo "Reading key from TPM NVRAM..."
     tpm2_nvread -x $NVRAM_INDEX -a $NVRAM_INDEX -L "$UNSEAL_PCRS" -f "$KEYFILE" >/dev/null
   else
-    echo "Usealing keyfile..."
+    echo "Unsealing keyfile..."
     tpm2_load -H $PARENT_HANDLE -r "$SEALED_KEY_PRIVATE" -u "$SEALED_KEY_PUBLIC" -C "$OBJECT_CONTEXT" >/dev/null
     tpm2_unseal -c "$OBJECT_CONTEXT" -o "$KEYFILE" -L "$UNSEAL_PCRS" >/dev/null
     retval=$?
