@@ -151,7 +151,7 @@ And then call `luks-tpm2` with appropriate options:
 License and Copyright
 ---------------------
 
-Copyright 2018 Corey Hinshaw <coreyhinshaw@gmail.com>
+Copyright 2018-2019 Corey Hinshaw <coreyhinshaw@gmail.com>
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by

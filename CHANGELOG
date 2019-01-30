@@ -1,3 +1,8 @@
+luks-tpm2 1.0.1
+---------------
+* Fix bug on first NVRAM init action
+* Fix typos (Wiktor)
+
 luks-tpm2 1.0.0
 ---------------
 * Use correct TCTI env var

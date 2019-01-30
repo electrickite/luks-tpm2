@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # luks-tpm2 -- Manage TPM 2.0 sealed LUKS keys
-# Copyright (C) 2018 Corey Hinshaw <coreyhinshaw@gmail.com>
+# Copyright (C) 2018-2019 Corey Hinshaw <coreyhinshaw@gmail.com>
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -17,7 +17,7 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 version() {
-  echo "luks-tpm2 1.0.0"
+  echo "luks-tpm2 1.0.1"
 }
 
 usage() {
