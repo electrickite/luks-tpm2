@@ -17,7 +17,7 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 version() {
-  echo "luks-tpm2 1.0.1"
+  echo "luks-tpm2 1.1.0"
 }
 
 usage() {
@@ -41,6 +41,8 @@ Options:
              Default: /boot/keyfile  (/boot/keyfile.priv /boot/keyfile.pub)
   -H HEX     The TPM handle of the parent object for the sealed key
              Default: 0x81000001
+  -K         Prompt for parent key password
+  -k PATH    Path to a file containing the parent key password
   -x HEX     Index of the TPM NVRAM area holding the key
   -s NUMBER  Key size in byes
              Default: 32
@@ -179,7 +181,8 @@ unseal_key() {
     tpm2_nvread -x $NVRAM_INDEX -a $NVRAM_INDEX -L "$UNSEAL_PCRS" -f "$KEYFILE" >/dev/null
   else
     echo "Unsealing keyfile..."
-    tpm2_load -H $PARENT_HANDLE -r "$SEALED_KEY_PRIVATE" -u "$SEALED_KEY_PUBLIC" -C "$OBJECT_CONTEXT" >/dev/null
+    set_parent_key
+    tpm2_load -H $PARENT_HANDLE $parent_key -r "$SEALED_KEY_PRIVATE" -u "$SEALED_KEY_PUBLIC" -C "$OBJECT_CONTEXT" >/dev/null
     tpm2_unseal -c "$OBJECT_CONTEXT" -o "$KEYFILE" -L "$UNSEAL_PCRS" >/dev/null
     retval=$?
     rm -f "$OBJECT_CONTEXT"
@@ -208,14 +211,8 @@ seal_key() {
     echo "Sealing keyfile with the TPM..."
     rm -f "$SEALED_KEY_PRIVATE" "$SEALED_KEY_PUBLIC"
 
-    createout=$(tpm2_create -H "$PARENT_HANDLE" -g sha256 -G keyedhash -A 0x492 -I "$KEYFILE" -L "$POLICY_DIGEST" -r "$SEALED_KEY_PRIVATE" -u "$SEALED_KEY_PUBLIC" 2>&1)
-    if echo "$createout" | grep -sqiE 'Error.*0x9a2'; then
-      read -s -p "Enter parent key password: " tpm_auth_pass
-      echo
-      [ -n "$tpm_auth_pass" ] && tpm_auth_pass="-P $tpm_auth_pass"
-
-      tpm2_create -H "$PARENT_HANDLE" -g sha256 -G keyedhash -A 0x492 $tpm_auth_pass -I "$KEYFILE" -L "$POLICY_DIGEST" -r "$SEALED_KEY_PRIVATE" -u "$SEALED_KEY_PUBLIC" >/dev/null
-    fi
+    set_parent_key
+    tpm2_create -H "$PARENT_HANDLE" -g sha256 -G keyedhash -A 0x492 $parent_key -I "$KEYFILE" -L "$POLICY_DIGEST" -r "$SEALED_KEY_PRIVATE" -u "$SEALED_KEY_PUBLIC" >/dev/null
   fi
   retval=$?
 
@@ -226,6 +223,19 @@ seal_key() {
 # Determine if we are using NVRAM for key storage
 use_nvram() {
   [ -n "$NVRAM_INDEX" ]
+}
+
+set_parent_key() {
+  [ -n "$parent_key" ] && return
+
+  if [ -n "$PARENT_KEY_PROMPT" ]; then
+    read -s -p "Enter parent key password: " parent_key
+    echo 
+  elif [ -f "$PARENT_KEY_PATH" ]; then
+    parent_key=$(cat "$PARENT_KEY_PATH")
+  fi
+
+  [ -n "$parent_key" ] && parent_key="-P $parent_key"
 }
 
 # Generate a random key of KEY_SIZE bytes
@@ -244,17 +254,17 @@ load_defaults() {
   SEALED_KEY_PUBLIC=/boot/keyfile.pub
   SEALED_KEY_PRIVATE=/boot/keyfile.priv
   PARENT_HANDLE="0x81000001"
+  PARENT_KEY_PROMPT=""
+  PARENT_KEY_PATH=""
   NVRAM_INDEX=""
   KEY_SIZE=32
   TPM_KEY_SLOT=1
   RESET_KEY_SLOT=2
   PCRS="sha1:0,2,4,7"
   UNSEAL_PCRS=""
-  TPM2TOOLS_TCTI="device:/dev/tpmrm0"
+  TPM2TOOLS_TCTI="${TPM2TOOLS_TCTI:-device:/dev/tpmrm0}"
 
-  if [ -z "$CONFFILE" ]; then
-    CONFFILE=/etc/default/luks-tpm2
-  fi
+  CONFFILE="${CONFFILE:-/etc/default/luks-tpm2}"
   if [ -r "$CONFFILE" ]; then
     source "$CONFFILE"
   fi
@@ -264,7 +274,7 @@ load_defaults() {
 parse_args() {
   ORIGINAL_ARGS="$@"
 
-  while getopts ":hvm:p:H:x:s:t:r:L:l:T:" opt; do
+  while getopts ":hvm:p:H:Kk:x:s:t:r:L:l:T:" opt; do
     case $opt in
       h)
         version
@@ -286,6 +296,12 @@ parse_args() {
         ;;
       H)
         PARENT_HANDLE="$OPTARG"
+        ;;
+      K)
+        PARENT_KEY_PROMPT="1"
+        ;;
+      k)
+        PARENT_KEY_PATH="$OPTARG"
         ;;
       x)
         NVRAM_INDEX="$OPTARG"
@@ -331,6 +347,11 @@ parse_args() {
         ;;
     esac
   done
+
+  if [ -n "$PARENT_KEY_PROMPT" ] && [ -n "$PARENT_KEY_PATH" ]; then
+    echo "-K and -k cannot both be set." >&2
+    exit 1
+  fi
 
   shift $((OPTIND-1))
 

@@ -75,6 +75,8 @@ Usage
                Default: /boot/keyfile  (/boot/keyfile.priv /boot/keyfile.pub)
     -H HEX     The TPM handle of the parent object for the sealed key
                Default: 0x81000001
+    -K         Prompt for parent key password
+    -k PATH    Path to a file containing the parent key password
     -x HEX     Index of the TPM NVRAM area holding the key
     -s NUMBER  Key size in byes
                Default: 32
@@ -116,22 +118,38 @@ altered since the data was sealed.
 
 Note that all TPM objects will be created in the owner hierarchy.
 
+Before working with the TPM, condiser setting the `TPM2TOOLS_TCTI` environment
+variable for your TPM resource manager. For example, to use the in-kernel RM:
+
+    $ export TPM2TOOLS_TCTI=device:/dev/tpmrm0
+
 ## On-disk
 
 Before storing sealed key files on disk, you must create a parent encryption key
 on the TPM. In this example, we create a primary RSA key in the owner hierarchy
 and make it persistent at handle `0x81000001`:
 
-    $ sudo tpm2_listpersistent -T device:/dev/tpmrm0
-    $ sudo tpm2_createprimary -H o -g sha1 -G rsa -T device:/dev/tpmrm0
-    $ sudo tpm2_evictcontrol -A o -H 0x80000000 -S 0x81000001 -T device:/dev/tpmrm0
+    $ sudo -E tpm2_listpersistent
+    $ sudo -E tpm2_createprimary -H o -g sha1 -G rsa -C primary.ctx
+    $ sudo -E tpm2_evictcontrol -A o -S 0x81000001 -c primary.ctx
 
 Next, call `luks-tpm2` with appropriate options:
 
-    $ sudo luks-tpm2 -p /boot/keyfile -H 0x81000001 /dev/sdaX init
+    $ sudo -E luks-tpm2 -p /boot/keyfile -H 0x81000001 /dev/sdaX init
 
 Two sealed files will be generated (in `/boot` for this example):
 `/boot/keyfile.priv` and `/boot/keyfile.pub`.
+
+### Parent key password
+
+The parent encryption key can optionally be created with a password. This
+password will need to be supplied during operations that require the parent key.
+The `-K` option will cause `luks-tpm2` to display an interactive password
+prompt. `-k PATH` will instead attempt to read the password from a file at PATH.
+
+    $ sudo -E tpm2_createprimary -H o -g sha1 -G rsa -C primary.ctx -K MyPassword
+    $ sudo -E tpm2_evictcontrol -A o -S 0x81000001 -c primary.ctx
+    $ sudo -E luks-tpm2 -p /boot/keyfile -H 0x81000001 -K /dev/sdaX init
 
 ## NVRAM
 
@@ -142,11 +160,11 @@ required.
 
 Before initializing NVRAM storage, locate a free index:
 
-    $ sudo tpm2_nvlist -T device:/dev/tpmrm0
+    $ sudo -E tpm2_nvlist
 
 And then call `luks-tpm2` with appropriate options:
 
-    $ sudo luks-tpm2 -x 0x1500001 /dev/sdaX init
+    $ sudo -E luks-tpm2 -x 0x1500001 /dev/sdaX init
 
 License and Copyright
 ---------------------

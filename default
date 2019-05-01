@@ -8,6 +8,8 @@
 # SEALED_KEY_PUBLIC    Absolute path to public portion of the sealed key
 # SEALED_KEY_PRIVATE   Absolute path to private portion of the sealed key
 # PARENT_HANDLE        Handle of the parent key when sealing data on disk
+# PARENT_KEY_PROMPT    Prompt for parent key password
+# PARENT_KEY_PATH      Path to a file containing the parent key password
 # NVRAM_INDEX          Index of NVRAM area to store key
 # KEY_SIZE             Size in bytes of the generated key
 # TPM_KEY_SLOT         LUKS slot number for the TPM-managed key
@@ -22,6 +24,8 @@
 #SEALED_KEY_PUBLIC="/boot/keyfile.pub"
 #SEALED_KEY_PRIVATE="/boot/keyfile.priv"
 #PARENT_HANDLE="0x81000001"
+#PARENT_KEY_PROMPT=""
+#PARENT_KEY_PATH=""
 #NVRAM_INDEX=""
 #KEY_SIZE=32
 #TPM_KEY_SLOT=1
