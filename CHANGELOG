@@ -1,3 +1,7 @@
+luks-tpm2 1.1.1
+---------------
+* Better handling of parent key passwords with spaces
+
 luks-tpm2 1.1.0
 ---------------
 * Add options to enter parent key password

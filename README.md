@@ -54,7 +54,7 @@ This action will not prompt for a passphrase, so the current key must be both
 Usage
 -----
 
-    luks-tpm2 [OPTION]... DEVICE ACTION
+    luks-tpm2 [OPTION]... [DEVICE] ACTION
 
 ### Actions
 

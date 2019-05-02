@@ -17,7 +17,7 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 version() {
-  echo "luks-tpm2 1.1.0"
+  echo "luks-tpm2 1.1.1"
 }
 
 usage() {
@@ -182,7 +182,7 @@ unseal_key() {
   else
     echo "Unsealing keyfile..."
     set_parent_key
-    tpm2_load -H $PARENT_HANDLE $parent_key -r "$SEALED_KEY_PRIVATE" -u "$SEALED_KEY_PUBLIC" -C "$OBJECT_CONTEXT" >/dev/null
+    tpm2_load -H $PARENT_HANDLE "${parent_key[@]}" -r "$SEALED_KEY_PRIVATE" -u "$SEALED_KEY_PUBLIC" -C "$OBJECT_CONTEXT" >/dev/null
     tpm2_unseal -c "$OBJECT_CONTEXT" -o "$KEYFILE" -L "$UNSEAL_PCRS" >/dev/null
     retval=$?
     rm -f "$OBJECT_CONTEXT"
@@ -212,7 +212,7 @@ seal_key() {
     rm -f "$SEALED_KEY_PRIVATE" "$SEALED_KEY_PUBLIC"
 
     set_parent_key
-    tpm2_create -H "$PARENT_HANDLE" -g sha256 -G keyedhash -A 0x492 $parent_key -I "$KEYFILE" -L "$POLICY_DIGEST" -r "$SEALED_KEY_PRIVATE" -u "$SEALED_KEY_PUBLIC" >/dev/null
+    tpm2_create -H "$PARENT_HANDLE" -g sha256 -G keyedhash -A 0x492 "${parent_key[@]}" -I "$KEYFILE" -L "$POLICY_DIGEST" -r "$SEALED_KEY_PRIVATE" -u "$SEALED_KEY_PUBLIC" >/dev/null
   fi
   retval=$?
 
@@ -235,7 +235,7 @@ set_parent_key() {
     parent_key=$(cat "$PARENT_KEY_PATH")
   fi
 
-  [ -n "$parent_key" ] && parent_key="-P $parent_key"
+  [ -n "$parent_key" ] && parent_key=(-P "$parent_key")
 }
 
 # Generate a random key of KEY_SIZE bytes
