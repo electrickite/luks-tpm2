@@ -51,7 +51,7 @@ Options:
   -r NUMBER  LUKS slot number for temporary reset passphrase
              Default: 2
   -L STRING  List of PCR banks used to seal LUKS key
-             Default: sha1:0,2,4,7
+             Default: sha256:0,2,4,7
   -l STRING  List of PCR banks used to unseal LUKS key
              Default: <value of -L>
   -T STRING  TCTI module used to communicate with the TPM
@@ -230,7 +230,7 @@ set_parent_key() {
 
   if [ -n "$PARENT_KEY_PROMPT" ]; then
     read -s -p "Enter parent key password: " parent_key
-    echo 
+    echo
   elif [ -f "$PARENT_KEY_PATH" ]; then
     parent_key=$(cat "$PARENT_KEY_PATH")
   fi
@@ -260,7 +260,7 @@ load_defaults() {
   KEY_SIZE=32
   TPM_KEY_SLOT=1
   RESET_KEY_SLOT=2
-  PCRS="sha1:0,2,4,7"
+  PCRS="sha256:0,2,4,7"
   UNSEAL_PCRS=""
   TPM2TOOLS_TCTI="${TPM2TOOLS_TCTI:-device:/dev/tpmrm0}"
 

@@ -85,7 +85,7 @@ Usage
     -r NUMBER  LUKS slot number for temporary reset passphrase
                Default: 2
     -L STRING  List of PCR banks used to seal LUKS key
-               Default: sha1:0,2,4,7
+               Default: sha256:0,2,4,7
     -l STRING  List of PCR banks used to unseal LUKS key
                Default: <value of -L>
     -T STRING  TCTI module used to communicate with the TPM
@@ -130,7 +130,7 @@ on the TPM. In this example, we create a primary RSA key in the owner hierarchy
 and make it persistent at handle `0x81000001`:
 
     $ sudo -E tpm2_listpersistent
-    $ sudo -E tpm2_createprimary -H o -g sha1 -G rsa -C primary.ctx
+    $ sudo -E tpm2_createprimary -H o -g sha256 -G rsa -C primary.ctx
     $ sudo -E tpm2_evictcontrol -A o -S 0x81000001 -c primary.ctx
 
 Next, call `luks-tpm2` with appropriate options:
@@ -147,7 +147,7 @@ password will need to be supplied during operations that require the parent key.
 The `-K` option will cause `luks-tpm2` to display an interactive password
 prompt. `-k PATH` will instead attempt to read the password from a file at PATH.
 
-    $ sudo -E tpm2_createprimary -H o -g sha1 -G rsa -C primary.ctx -K MyPassword
+    $ sudo -E tpm2_createprimary -H o -g sha256 -G rsa -C primary.ctx -K MyPassword
     $ sudo -E tpm2_evictcontrol -A o -S 0x81000001 -c primary.ctx
     $ sudo -E luks-tpm2 -p /boot/keyfile -H 0x81000001 -K /dev/sdaX init
 
