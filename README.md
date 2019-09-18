@@ -131,17 +131,14 @@ as root.
 
 Before storing sealed key files on disk, you must create a parent encryption key
 on the TPM. In this example, we create a primary RSA key in the owner hierarchy
-and make it persistent:
+and make it persistent at handle `0x81000001`:
 
     $ tpm2_createprimary -c primary.ctx
-    $ tpm2_evictcontrol -c primary.ctx
-
-Look at the output for `persistent-handle` of the last command, e.g.
-`0x81000000`, and use it in the following commands.
+    $ tpm2_evictcontrol -c primary.ctx 0x81000001
 
 Next, call `luks-tpm2` with appropriate options:
 
-    $ sudo -E luks-tpm2 -p /boot/keyfile -H 0x81000000 /dev/sdaX init
+    $ sudo -E luks-tpm2 -p /boot/keyfile -H 0x81000001 /dev/sdaX init
 
 Two sealed files will be generated (in `/boot` for this example):
 `/boot/keyfile.priv` and `/boot/keyfile.pub`.
@@ -154,8 +151,8 @@ The `-K` option will cause `luks-tpm2` to display an interactive password
 prompt. `-k PATH` will instead attempt to read the password from a file at PATH.
 
     $ tpm2_createprimary -c primary.ctx -p MyPassword
-    $ tpm2_evictcontrol -c primary.ctx
-    $ sudo -E luks-tpm2 -p /boot/keyfile -H 0x81000000 -K /dev/sdaX init
+    $ tpm2_evictcontrol -c primary.ctx 0x81000001
+    $ sudo -E luks-tpm2 -p /boot/keyfile -H 0x81000001 -K /dev/sdaX init
 
 ## NVRAM
 
@@ -175,7 +172,7 @@ And then call `luks-tpm2` with appropriate options:
 License and Copyright
 ---------------------
 
-Copyright 2018-2019 Corey Hinshaw <coreyhinshaw@gmail.com>
+Copyright 2018-2019 Corey Hinshaw <corey@electrickite.org>
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by

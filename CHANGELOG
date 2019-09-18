@@ -1,3 +1,8 @@
+luks-tpm2 2.0.0
+---------------
+* Update to tpm2-tools v4 (diabonas)
+* Use sha256 as default algorithm (wiktor)
+
 luks-tpm2 1.1.1
 ---------------
 * Better handling of parent key passwords with spaces

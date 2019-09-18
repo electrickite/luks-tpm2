@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # luks-tpm2 -- Manage TPM 2.0 sealed LUKS keys
-# Copyright (C) 2018-2019 Corey Hinshaw <coreyhinshaw@gmail.com>
+# Copyright (C) 2018-2019 Corey Hinshaw <corey@electrickite.org>
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -17,7 +17,7 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 version() {
-  echo "luks-tpm2 1.1.1"
+  echo "luks-tpm2 2.0.0"
 }
 
 usage() {
@@ -178,7 +178,7 @@ destroy_ramfs() {
 unseal_key() {
   if use_nvram; then
     echo "Reading key from TPM NVRAM..."
-    tpm2_nvread $NVRAM_INDEX -P "pcr:$UNSEAL_PCRS" -o "$KEYFILE" >/dev/null
+    tpm2_nvread -P "pcr:$UNSEAL_PCRS" -o "$KEYFILE" $NVRAM_INDEX >/dev/null
   else
     echo "Unsealing keyfile..."
     set_parent_key
@@ -204,9 +204,9 @@ seal_key() {
       [ -n "$tpm_auth_pass" ] && tpm_auth_pass="-P $tpm_auth_pass"
     fi
 
-    tpm2_nvundefine "$NVRAM_INDEX" $tpm_auth_pass >/dev/null 2>&1
-    tpm2_nvdefine "$NVRAM_INDEX" $tpm_auth_pass -L "$POLICY_DIGEST" -s $KEY_SIZE -a "policyread|policywrite" >/dev/null
-    tpm2_nvwrite "$NVRAM_INDEX" -P "pcr:$PCRS" -i "$KEYFILE" >/dev/null
+    tpm2_nvundefine $tpm_auth_pass "$NVRAM_INDEX" >/dev/null 2>&1
+    tpm2_nvdefine $tpm_auth_pass -L "$POLICY_DIGEST" -s $KEY_SIZE -a "policyread|policywrite" "$NVRAM_INDEX" >/dev/null
+    tpm2_nvwrite -P "pcr:$PCRS" -i "$KEYFILE" "$NVRAM_INDEX" >/dev/null
   else
     echo "Sealing keyfile with the TPM..."
     rm -f "$SEALED_KEY_PRIVATE" "$SEALED_KEY_PUBLIC"
