@@ -178,12 +178,12 @@ destroy_ramfs() {
 unseal_key() {
   if use_nvram; then
     echo "Reading key from TPM NVRAM..."
-    tpm2_nvread -x $NVRAM_INDEX -a $NVRAM_INDEX -L "$UNSEAL_PCRS" -f "$KEYFILE" >/dev/null
+    tpm2_nvread $NVRAM_INDEX -P "pcr:$UNSEAL_PCRS" -o "$KEYFILE" >/dev/null
   else
     echo "Unsealing keyfile..."
     set_parent_key
-    tpm2_load -H $PARENT_HANDLE "${parent_key[@]}" -r "$SEALED_KEY_PRIVATE" -u "$SEALED_KEY_PUBLIC" -C "$OBJECT_CONTEXT" >/dev/null
-    tpm2_unseal -c "$OBJECT_CONTEXT" -o "$KEYFILE" -L "$UNSEAL_PCRS" >/dev/null
+    tpm2_load -C $PARENT_HANDLE "${parent_key[@]}" -r "$SEALED_KEY_PRIVATE" -u "$SEALED_KEY_PUBLIC" -c "$OBJECT_CONTEXT" >/dev/null
+    tpm2_unseal -c "$OBJECT_CONTEXT" -o "$KEYFILE" -p "pcr:$UNSEAL_PCRS" >/dev/null
     retval=$?
     rm -f "$OBJECT_CONTEXT"
     return $retval
@@ -192,27 +192,27 @@ unseal_key() {
 
 # Seal a key to the TPM
 seal_key() {
-  if ! tpm2_createpolicy -P -L "$PCRS" -f "$POLICY_DIGEST" >/dev/null; then
+  if ! tpm2_createpolicy --policy-pcr -l "$PCRS" -L "$POLICY_DIGEST" >/dev/null; then
     return 1
   fi
 
   if use_nvram; then
     echo "Storing key in TPM NVRAM..."
-    if ! tpm2_getcap -c properties-variable 2>&1 | grep ownerAuthSet | grep -sq clear; then
+    if ! tpm2_getcap properties-variable 2>&1 | grep ownerAuthSet | grep -sq 0; then
       read -s -p "Enter TPM owner password: " tpm_auth_pass
       echo
       [ -n "$tpm_auth_pass" ] && tpm_auth_pass="-P $tpm_auth_pass"
     fi
 
-    tpm2_nvrelease -x "$NVRAM_INDEX" -a 0x40000001 $tpm_auth_pass >/dev/null 2>&1
-    tpm2_nvdefine -x "$NVRAM_INDEX" -a 0x40000001 $tpm_auth_pass -L "$POLICY_DIGEST" -s $KEY_SIZE -t "policyread|policywrite" >/dev/null
-    tpm2_nvwrite -x "$NVRAM_INDEX" -a "$NVRAM_INDEX" -L "$PCRS" "$KEYFILE" >/dev/null
+    tpm2_nvundefine "$NVRAM_INDEX" $tpm_auth_pass >/dev/null 2>&1
+    tpm2_nvdefine "$NVRAM_INDEX" $tpm_auth_pass -L "$POLICY_DIGEST" -s $KEY_SIZE -a "policyread|policywrite" >/dev/null
+    tpm2_nvwrite "$NVRAM_INDEX" -P "pcr:$PCRS" -i "$KEYFILE" >/dev/null
   else
     echo "Sealing keyfile with the TPM..."
     rm -f "$SEALED_KEY_PRIVATE" "$SEALED_KEY_PUBLIC"
 
     set_parent_key
-    tpm2_create -H "$PARENT_HANDLE" -g sha256 -G keyedhash -A 0x492 "${parent_key[@]}" -I "$KEYFILE" -L "$POLICY_DIGEST" -r "$SEALED_KEY_PRIVATE" -u "$SEALED_KEY_PUBLIC" >/dev/null
+    tpm2_create -C "$PARENT_HANDLE" -a 'fixedtpm|fixedparent|adminwithpolicy|noda' "${parent_key[@]}" -i "$KEYFILE" -L "$POLICY_DIGEST" -r "$SEALED_KEY_PRIVATE" -u "$SEALED_KEY_PUBLIC" >/dev/null
   fi
   retval=$?
 

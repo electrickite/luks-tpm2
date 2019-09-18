@@ -14,7 +14,7 @@ Requirements
 This script requires:
 
   * [bash](https://www.gnu.org/software/bash/)
-  * [tpm2-tools](https://github.com/tpm2-software/tpm2-tools) v3.1
+  * [tpm2-tools](https://github.com/tpm2-software/tpm2-tools) v4
   * [cryptsetup](https://gitlab.com/cryptsetup/cryptsetup)
   * A TPM 2.0 or TPM 2.0 simulator
 
@@ -118,24 +118,30 @@ altered since the data was sealed.
 
 Note that all TPM objects will be created in the owner hierarchy.
 
-Before working with the TPM, condiser setting the `TPM2TOOLS_TCTI` environment
+Before working with the TPM, consider setting the `TPM2TOOLS_TCTI` environment
 variable for your TPM resource manager. For example, to use the in-kernel RM:
 
     $ export TPM2TOOLS_TCTI=device:/dev/tpmrm0
+
+If you want to be able to access the TPM as a normal user, add yourself to the
+`tss` group, otherwise you will have to run all the following `tpm2_` commands
+as root.
 
 ## On-disk
 
 Before storing sealed key files on disk, you must create a parent encryption key
 on the TPM. In this example, we create a primary RSA key in the owner hierarchy
-and make it persistent at handle `0x81000001`:
+and make it persistent:
 
-    $ sudo -E tpm2_listpersistent
-    $ sudo -E tpm2_createprimary -H o -g sha256 -G rsa -C primary.ctx
-    $ sudo -E tpm2_evictcontrol -A o -S 0x81000001 -c primary.ctx
+    $ tpm2_createprimary -c primary.ctx
+    $ tpm2_evictcontrol -c primary.ctx
+
+Look at the output for `persistent-handle` of the last command, e.g.
+`0x81000000`, and use it in the following commands.
 
 Next, call `luks-tpm2` with appropriate options:
 
-    $ sudo -E luks-tpm2 -p /boot/keyfile -H 0x81000001 /dev/sdaX init
+    $ sudo -E luks-tpm2 -p /boot/keyfile -H 0x81000000 /dev/sdaX init
 
 Two sealed files will be generated (in `/boot` for this example):
 `/boot/keyfile.priv` and `/boot/keyfile.pub`.
@@ -147,9 +153,9 @@ password will need to be supplied during operations that require the parent key.
 The `-K` option will cause `luks-tpm2` to display an interactive password
 prompt. `-k PATH` will instead attempt to read the password from a file at PATH.
 
-    $ sudo -E tpm2_createprimary -H o -g sha256 -G rsa -C primary.ctx -K MyPassword
-    $ sudo -E tpm2_evictcontrol -A o -S 0x81000001 -c primary.ctx
-    $ sudo -E luks-tpm2 -p /boot/keyfile -H 0x81000001 -K /dev/sdaX init
+    $ tpm2_createprimary -c primary.ctx -p MyPassword
+    $ tpm2_evictcontrol -c primary.ctx
+    $ sudo -E luks-tpm2 -p /boot/keyfile -H 0x81000000 -K /dev/sdaX init
 
 ## NVRAM
 
@@ -160,7 +166,7 @@ required.
 
 Before initializing NVRAM storage, locate a free index:
 
-    $ sudo -E tpm2_nvlist
+    $ tpm2_getcap handles-nv-index
 
 And then call `luks-tpm2` with appropriate options:
 
