@@ -30,6 +30,6 @@
 #KEY_SIZE=32
 #TPM_KEY_SLOT=1
 #RESET_KEY_SLOT=2
-#PCRS="sha1:0,2,4,7"
-#UNSEAL_PCRS="sha1:0,2,4,7"
+#PCRS="sha256:0,2,4,7"
+#UNSEAL_PCRS="sha256:0,2,4,7"
 #TPM2TOOLS_TCTI="device:/dev/tpmrm0"

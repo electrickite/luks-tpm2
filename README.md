@@ -85,7 +85,7 @@ Usage
     -r NUMBER  LUKS slot number for temporary reset passphrase
                Default: 2
     -L STRING  List of PCR banks used to seal LUKS key
-               Default: sha1:0,2,4,7
+               Default: sha256:0,2,4,7
     -l STRING  List of PCR banks used to unseal LUKS key
                Default: <value of -L>
     -T STRING  TCTI module used to communicate with the TPM
