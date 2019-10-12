@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 # luks-tpm2 -- Manage TPM 2.0 sealed LUKS keys
 # Copyright (C) 2018-2019 Corey Hinshaw <corey@electrickite.org>
@@ -63,8 +63,9 @@ EOF
 init_tpm_key() {
   echo "Initializing LUKS TPM key for $ROOT_DEVICE"
   echo "WARNING: This will permanently delete the key in slot $TPM_KEY_SLOT!"
-  read -p "Do you wish to proceed? [Y/n] " choice
+  read -p "Do you wish to proceed? [y/N] " choice
   if [ "$choice" != "y" ] && [ "$choice" != "Y" ]; then
+    echo "Canceled."
     RETURN_CODE=0
     return
   fi
