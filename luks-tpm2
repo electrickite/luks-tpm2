@@ -1,7 +1,7 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 # luks-tpm2 -- Manage TPM 2.0 sealed LUKS keys
-# Copyright (C) 2018-2019 Corey Hinshaw <corey@electrickite.org>
+# Copyright (C) 2018-2020 Corey Hinshaw <corey@electrickite.org>
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -17,7 +17,7 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 version() {
-  echo "luks-tpm2 2.0.1"
+  echo "luks-tpm2 2.1.0"
 }
 
 usage() {
@@ -25,37 +25,40 @@ usage() {
 Usage: luks-tpm2 [OPTION]... [DEVICE] ACTION
 
 Actions:
-  init       Initialize the LUKS TPM key slot
-  temp       Set a temporary LUKS passphrase
-  reset      Reset the LUKS TPM key using a passphrase
-  replace    Replace (overwrite) a LUKS TPM key
+  init        Initialize the LUKS TPM key slot
+  temp        Set a temporary LUKS passphrase
+  reset       Reset the LUKS TPM key using a passphrase
+  replace     Replace (overwrite) a LUKS TPM key
+  compute     Precompute PCR values and replace a LUKS TPM key
 
 Options:
-  -h         Print this help text
-  -v         Print version information
-  -m PATH    Mount point for the tmpfs file system used to store TPM keyfiles
-             Default: /root/keyfs
-  -p PATH    Sealed keyfile path
-             .priv will be added to the path for the private section and .pub
-             will be added for the public portion
-             Default: /boot/keyfile  (/boot/keyfile.priv /boot/keyfile.pub)
-  -H HEX     The TPM handle of the parent object for the sealed key
-             Default: 0x81000001
-  -K         Prompt for parent key password
-  -k PATH    Path to a file containing the parent key password
-  -x HEX     Index of the TPM NVRAM area holding the key
-  -s NUMBER  Key size in byes
-             Default: 32
-  -t NUMBER  LUKS slot number for the TPM key
-             Default: 1
-  -r NUMBER  LUKS slot number for temporary reset passphrase
-             Default: 2
-  -L STRING  List of PCR banks used to seal LUKS key
-             Default: sha256:0,2,4,7
-  -l STRING  List of PCR banks used to unseal LUKS key
-             Default: <value of -L>
-  -T STRING  TCTI module used to communicate with the TPM
-             Default: device:/dev/tpmrm0
+  -h          Print this help text
+  -v          Print version information
+  -m PATH     Mount point for the tmpfs file system used to store TPM keyfiles
+              Default: /root/keyfs
+  -p PATH     Sealed keyfile path
+              .priv will be added to the path for the private section and .pub
+              will be added for the public portion
+              Default: /boot/keyfile  (/boot/keyfile.priv /boot/keyfile.pub)
+  -H HEX      The TPM handle of the parent object for the sealed key
+              Default: 0x81000001
+  -K          Prompt for parent key password
+  -k PATH     Path to a file containing the parent key password
+  -x HEX      Index of the TPM NVRAM area holding the key
+  -s NUMBER   Key size in bytes
+              Default: 32
+  -t NUMBER   LUKS slot number for the TPM key
+              Default: 1
+  -r NUMBER   LUKS slot number for temporary reset passphrase
+              Default: 2
+  -L STRING   List of PCR banks used to seal LUKS key
+              Default: sha256:0,2,4,7
+  -l STRING   List of PCR banks used to unseal LUKS key
+              Default: <value of -L>
+  -T STRING   TCTI module used to communicate with the TPM
+              Default: device:/dev/tpmrm0
+  -c COMMAND  The command used to precompute PCR values
+              Ex: tpm_futurepcr -L '::pcr::' -o '::output::'
 EOF
 }
 
@@ -136,7 +139,7 @@ reset_tpm_key() {
   fi
 }
 
-# Reaplce the LUKS TPM key with a new value
+# Replace the LUKS TPM key with a new value
 replace_tpm_key() {
   original_keyfile="$KEYFILE.orig"
   unseal_key
@@ -154,6 +157,18 @@ replace_tpm_key() {
     echo "There was an error replacing the TPM key in slot $TPM_KEY_SLOT!" >&2
     RETURN_CODE=6
   fi
+}
+
+# Pre-compute PCR values and replace tpm key
+compute_tpm_key() {
+  echo "Precomputing PCR values..."
+  PCR_LIST="$PCRS" OUTPUT_PATH="$PCR_VALUES" sh -c "$COMPUTE_COMMAND" > /dev/null
+  if [ $? -ne 0 ]; then
+    echo "There was an error computing the PCR values"
+    RETURN_CODE=10
+    return
+  fi
+  replace_tpm_key
 }
 
 # Create a temporary in-memory file system to store key files
@@ -193,7 +208,11 @@ unseal_key() {
 
 # Seal a key to the TPM
 seal_key() {
-  if ! tpm2_createpolicy --policy-pcr -l "$PCRS" -L "$POLICY_DIGEST" >/dev/null; then
+  if [ ! -f "$PCR_VALUES" ]; then
+    tpm2_pcrread -o "$PCR_VALUES"
+  fi
+
+  if ! tpm2_createpolicy --policy-pcr -l "$PCRS" -f "$PCR_VALUES" -L "$POLICY_DIGEST" >/dev/null; then
     return 1
   fi
 
@@ -264,6 +283,7 @@ load_defaults() {
   PCRS="sha256:0,2,4,7"
   UNSEAL_PCRS=""
   TPM2TOOLS_TCTI="${TPM2TOOLS_TCTI:-device:/dev/tpmrm0}"
+  COMPUTE_COMMAND=""
 
   CONFFILE="${CONFFILE:-/etc/default/luks-tpm2}"
   if [ -r "$CONFFILE" ]; then
@@ -275,7 +295,7 @@ load_defaults() {
 parse_args() {
   ORIGINAL_ARGS="$@"
 
-  while getopts ":hvm:p:H:Kk:x:s:t:r:L:l:T:" opt; do
+  while getopts ":hvm:p:H:Kk:x:s:t:r:L:l:T:c:" opt; do
     case $opt in
       h)
         version
@@ -337,6 +357,9 @@ parse_args() {
       T)
         TPM2TOOLS_TCTI="$OPTARG"
         ;;
+      c)
+        COMPUTE_COMMAND="$OPTARG"
+        ;;
       \?)
         echo "Invalid option: -$OPTARG" >&2
         usage >&2
@@ -380,6 +403,7 @@ init_globals() {
     temp) ACTION=add_temp_key;;
     reset) ACTION=reset_tpm_key;;
     replace) ACTION=replace_tpm_key;;
+    compute) ACTION=compute_tpm_key;;
     *)
       echo "Invalid action!" >&2
       usage >&2
@@ -394,7 +418,15 @@ init_globals() {
   KEYFILE="$TMPFS_MOUNT/keyfile"
   POLICY_DIGEST="$TMPFS_MOUNT/policy.digest"
   OBJECT_CONTEXT="$TMPFS_MOUNT/object.context"
+  PCR_VALUES="$TMPFS_MOUNT/pcr.bin"
   RETURN_CODE=0
+
+  if [ -z "$COMPUTE_COMMAND" ] && [ $ACTION == compute_tpm_key ]; then
+    echo "No PCR compute command specified!" >&2
+    exit 1
+  fi
+  COMPUTE_COMMAND=${COMPUTE_COMMAND//::pcr::/$PCRS}
+  COMPUTE_COMMAND=${COMPUTE_COMMAND//::output::/$PCR_VALUES}
 
   IFS=: read TPM2TOOLS_TCTI_NAME TPM2TOOLS_DEVICE_FILE <<EOF
 $TPM2TOOLS_TCTI

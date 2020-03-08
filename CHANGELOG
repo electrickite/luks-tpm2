@@ -1,3 +1,7 @@
+luks-tpm2 2.1.0
+---------------
+* Add compute action to pre-compute PCR values
+
 luks-tpm2 2.0.1
 ---------------
 * Clarify cancellation of init action (noahbliss)

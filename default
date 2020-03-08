@@ -17,6 +17,8 @@
 # PCRS                 TPM2-Tools PCR bank selection list used to seal key
 # UNSEAL_PCRS          TPM2-Tools PCR bank selection list used to unseal key
 # TPM2TOOLS_TCTI       TPM2-Tools TCTI identifier
+# COMPUTE_COMMAND      The command used to precompute PCR values
+#                      Ex: "tpm_futurepcr -L '::pcr::' -o '::output::'"
 # ROOT_DEVICE          The LUKS block device path
 # ACTION               The default command action
 
@@ -33,3 +35,4 @@
 #PCRS="sha256:0,2,4,7"
 #UNSEAL_PCRS="sha256:0,2,4,7"
 #TPM2TOOLS_TCTI="device:/dev/tpmrm0"
+#COMPUTE_COMMAND=""

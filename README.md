@@ -21,7 +21,8 @@ This script requires:
 Update Process
 --------------
 
-The script facilitates the following kernel update process:
+The script facilitates a variety of kernel update flows. For example, you could
+set a temporary passphrase interactively during the update:
 
   1. Kernel is updated
   2. `luks-tpm2 temp` is called, either manually or via an update hook, and sets
@@ -31,6 +32,19 @@ The script facilitates the following kernel update process:
   5. User enters the temporary passphrase to unlock the disk
   6. `luks-tpm2 reset` is called, generating a new keyfile sealed by the TPM and
      removing the temporary passphrase
+
+Alternately, the PCR values of the new kernel can be computed in advance using
+and external command. The example below uses [tpm_futurepcr](https://github.com/grawity/tpm_futurepcr):
+
+  1. Kernel is updated
+  2. `luks-tpm2 -c "tpm_futurepcr -L '::pcr::' -o '::output::'" compute` is
+      called, either manually or via an update hook, which pre-computes the new
+      kernel PCR values and replaces the existing TPM key with a new, random
+      value
+  3. The system is rebooted into the new kernel
+  4. Because the pre-computed PCR values match the new kernel, unsealing the
+     key succeeds
+  5. The unsealed key is used to unlock the disk normally
 
 ### LUKS Key Slots
 
@@ -44,24 +58,10 @@ The default key slot layout is:
   * Slot 1: TPM keyfile
   * Slot 2: Temporary passphrase
 
-### Replace Key
-
-The `replace` action allows a TPM-sealed LUKS key to be replaced (overwritten)
-by a new, randomly generated key. By default, LUKS slot 1 will be replaced.
-This action will not prompt for a passphrase, so the current key must be both
-"unsealable" by the TPM and a valid LUKS key.
-
 Usage
 -----
 
     luks-tpm2 [OPTION]... [DEVICE] ACTION
-
-### Actions
-
-  * `init`: Initialize the LUKS TPM key slot
-  * `temp`: Set a temporary LUKS passphrase
-  * `reset`: Regenerate the LUKS TPM key and remove the temporary passphrase
-  * `replace`: Replace (overwrite) a LUKS TPM key
 
 ### Options
 
@@ -90,6 +90,57 @@ Usage
                Default: <value of -L>
     -T STRING  TCTI module used to communicate with the TPM
                Default: device:/dev/tpmrm0
+    -c COMMAND The command used to precompute PCR values
+               Ex: tpm_futurepcr -L '::pcr::' -o '::output::'
+
+### Actions
+
+#### init
+
+Initialize the LUKS TPM key slot, by default in LUKS slot 1. This action will
+prompt for an existing LUKS passphrase and remove any existing key in slot 1.
+It will then generate a random key, seal it with the TPM against the current
+PCR values, and store the sealed key on disk or in NVRAM depending on the
+options specified.
+
+#### temp
+
+Set a temporary LUKS passphrase. The TPM will be used to unseal the passphrase
+for LUKS slot 1, which will be used to set a temporary passphrase in slot 2.
+The user will be interactively prompted to enter this temporary passphrase.
+
+#### reset
+
+Prompts the user for the temporary passphrase (if needed) and uses it to set a
+new passphrase in slot 1. The slot one key is then sealed by the TPM using the
+current PCR values, and LUKS slot 2 is cleared.
+
+#### replace
+
+The `replace` action allows a TPM-sealed LUKS key to be replaced (overwritten)
+by a new, randomly generated key. By default, LUKS slot 1 will be replaced.
+This action will not prompt for a passphrase, so the current key must be both
+"unsealable" by the TPM and a valid LUKS key.
+
+#### compute
+
+Pre-computes the PCR values for the kernel that will be used on next boot. Use
+the precomputed values to replace the current LUKS passphrase with a new,
+random value.
+
+Pre-computing the PCR values is accomplished using an external command specified
+by the -c option or using the defaults file. The command is executed using the
+system `sh` POSIX shell. The command is expected to accept the PCR bank
+specification used to seal the passphrase, compute the PCR values for the next
+system boot, and write their binary values to the supplied output path.
+
+Two placeholders can be used in the command string:
+
+  * `::pcr::` will be replaced by the PCR bank specfication
+  * `::output::` will be replaced by the output path for the binary PCR values
+
+In addition, the command environment will contain `PCR_LIST` and `OUTPUT_PATH`
+variables that contain the same information as the placeholders.
 
 ### Default configuration
 
@@ -172,7 +223,7 @@ And then call `luks-tpm2` with appropriate options:
 License and Copyright
 ---------------------
 
-Copyright 2018-2019 Corey Hinshaw <corey@electrickite.org>
+Copyright 2018-2020 Corey Hinshaw <corey@electrickite.org>
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
