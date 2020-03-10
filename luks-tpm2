@@ -209,7 +209,7 @@ unseal_key() {
 # Seal a key to the TPM
 seal_key() {
   if [ ! -f "$PCR_VALUES" ]; then
-    tpm2_pcrread -o "$PCR_VALUES"
+    tpm2_pcrread -o "$PCR_VALUES" "$PCRS" >/dev/null
   fi
 
   if ! tpm2_createpolicy --policy-pcr -l "$PCRS" -f "$PCR_VALUES" -L "$POLICY_DIGEST" >/dev/null; then
