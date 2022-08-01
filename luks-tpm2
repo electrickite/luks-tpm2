@@ -73,7 +73,7 @@ init_tpm_key() {
     return
   fi
 
-  read -s -p "Enter any existing LUKS passphrase: " PASSPHRASE
+  read -r -s -p "Enter any existing LUKS passphrase: " PASSPHRASE
   echo
 
   echo "Generating new LUKS key..."
