@@ -83,7 +83,7 @@ init_tpm_key() {
   echo $PASSPHRASE | cryptsetup luksKillSlot $ROOT_DEVICE $TPM_KEY_SLOT
 
   echo "Adding new key to slot $TPM_KEY_SLOT..."
-  echo $PASSPHRASE | cryptsetup luksAddKey $ROOT_DEVICE "$KEYFILE" --key-slot $TPM_KEY_SLOT
+  echo $PASSPHRASE | cryptsetup luksAddKey $ROOT_DEVICE "$KEYFILE" --new-key-slot $TPM_KEY_SLOT
   addkey=$?
 
   seal_key
@@ -102,7 +102,7 @@ add_temp_key() {
   echo "Preparing to set a temporary LUKS passphrase for $ROOT_DEVICE..."
   cryptsetup luksKillSlot --key-file "$KEYFILE" $ROOT_DEVICE $RESET_KEY_SLOT >/dev/null 2>&1
 
-  if cryptsetup luksAddKey --key-slot $RESET_KEY_SLOT --key-file "$KEYFILE" $ROOT_DEVICE < /dev/tty; then
+  if cryptsetup luksAddKey --new-key-slot $RESET_KEY_SLOT --key-file "$KEYFILE" $ROOT_DEVICE < /dev/tty; then
     echo "After booting into the current kernel, run"
     echo "  luks-tpm2 $(echo $ORIGINAL_ARGS | sed 's/temp$/reset/')"
     echo "to generate a new LUKS key and remove this temporary key"
@@ -123,7 +123,7 @@ reset_tpm_key() {
   echo $PASSPHRASE | cryptsetup luksKillSlot $ROOT_DEVICE $TPM_KEY_SLOT
 
   echo "Adding new key to slot $TPM_KEY_SLOT..."
-  echo $PASSPHRASE | cryptsetup luksAddKey $ROOT_DEVICE "$KEYFILE" --key-slot $TPM_KEY_SLOT
+  echo $PASSPHRASE | cryptsetup luksAddKey $ROOT_DEVICE "$KEYFILE" --new-key-slot $TPM_KEY_SLOT
   addkey=$?
 
   seal_key
@@ -148,7 +148,7 @@ replace_tpm_key() {
   generate_keyfile
 
   echo "Replacing LUKS key in slot $TPM_KEY_SLOT on $ROOT_DEVICE..."
-  if cryptsetup luksChangeKey $ROOT_DEVICE "$KEYFILE" --key-slot $TPM_KEY_SLOT --key-file "$original_keyfile"; then
+  if cryptsetup luksChangeKey $ROOT_DEVICE "$KEYFILE" --new-key-slot $TPM_KEY_SLOT --key-file "$original_keyfile"; then
     if ! seal_key; then
       echo "There was an error sealing the new keyfile!" >&2
       RETURN_CODE=7
