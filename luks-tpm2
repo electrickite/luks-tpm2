@@ -148,7 +148,7 @@ replace_tpm_key() {
   generate_keyfile
 
   echo "Replacing LUKS key in slot $TPM_KEY_SLOT on $ROOT_DEVICE..."
-  if cryptsetup luksChangeKey $ROOT_DEVICE "$KEYFILE" --new-key-slot $TPM_KEY_SLOT --key-file "$original_keyfile"; then
+  if cryptsetup luksChangeKey $ROOT_DEVICE "$KEYFILE" --key-slot $TPM_KEY_SLOT --key-file "$original_keyfile"; then
     if ! seal_key; then
       echo "There was an error sealing the new keyfile!" >&2
       RETURN_CODE=7
