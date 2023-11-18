@@ -76,8 +76,7 @@ init_tpm_key() {
 
   ARGS=""
   if [ -n "$LUKS_KEYFILE_PATH" ]; then
-    ARGS="--key-file -"
-    PASSPHRASE=$(cat "$LUKS_KEYFILE_PATH")
+    ARGS="--key-file $LUKS_KEYFILE_PATH"
   else
     read -r -s -p "Enter any existing LUKS passphrase: " PASSPHRASE
     echo
