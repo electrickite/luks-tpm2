@@ -343,7 +343,7 @@ parse_args() {
         TPM_KEY_SLOT=$OPTARG
         ;;
       f)
-        if [ ! -f "$OPTARG" ];
+        if [ ! -f "$OPTARG" ]; then
           echo "Keyfile does not exist: $OPTARG" >&2
           exit 1
         fi
