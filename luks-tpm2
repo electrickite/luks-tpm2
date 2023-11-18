@@ -303,7 +303,7 @@ load_defaults() {
 parse_args() {
   ORIGINAL_ARGS="$@"
 
-  while getopts ":hvm:p:H:Kk:x:s:t:r:L:l:T:c:" opt; do
+  while getopts ":hvm:p:H:Kk:x:s:f:t:r:L:l:T:c:" opt; do
     case $opt in
       h)
         version
