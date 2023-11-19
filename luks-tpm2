@@ -48,6 +48,7 @@ Options:
   -x HEX      Index of the TPM NVRAM area holding the key
   -s NUMBER   Key size in bytes
               Default: 32
+  -f PATH     LUKS keyfile used instead of prompting for LUKS passphraes
   -t NUMBER   LUKS slot number for the TPM key
               Default: 1
   -r NUMBER   LUKS slot number for temporary reset passphrase
@@ -76,17 +77,22 @@ init_tpm_key() {
     fi
   fi
 
-  read -r -s -p "Enter any existing LUKS passphrase: " PASSPHRASE
-  echo
+  ARGS=""
+  if [ -n "$LUKS_KEYFILE_PATH" ]; then
+    ARGS="--key-file $LUKS_KEYFILE_PATH"
+  else
+    read -r -s -p "Enter any existing LUKS passphrase: " PASSPHRASE
+    echo
+  fi
 
   echo "Generating new LUKS key..."
   generate_keyfile
 
   echo "Removing existing key from slot $TPM_KEY_SLOT..."
-  echo $PASSPHRASE | cryptsetup luksKillSlot $ROOT_DEVICE $TPM_KEY_SLOT
+  echo $PASSPHRASE | cryptsetup luksKillSlot $ARGS $ROOT_DEVICE $TPM_KEY_SLOT
 
   echo "Adding new key to slot $TPM_KEY_SLOT..."
-  echo $PASSPHRASE | cryptsetup luksAddKey $ROOT_DEVICE "$KEYFILE" --new-key-slot $TPM_KEY_SLOT
+  echo $PASSPHRASE | cryptsetup luksAddKey $ARGS $ROOT_DEVICE "$KEYFILE" --new-key-slot $TPM_KEY_SLOT
   addkey=$?
 
   seal_key
@@ -286,6 +292,7 @@ load_defaults() {
   PARENT_HANDLE="0x81000001"
   PARENT_KEY_PROMPT=""
   PARENT_KEY_PATH=""
+  LUKS_KEYFILE_PATH=""
   NVRAM_INDEX=""
   KEY_SIZE=32
   TPM_KEY_SLOT=1
@@ -306,7 +313,7 @@ load_defaults() {
 parse_args() {
   ORIGINAL_ARGS="$@"
 
-  while getopts ":hvqm:p:H:Kk:x:s:t:r:L:l:T:c:" opt; do
+  while getopts ":hvmq:p:H:Kk:x:s:f:t:r:L:l:T:c:" opt; do
     case $opt in
       h)
         version
@@ -346,7 +353,14 @@ parse_args() {
           echo "Invalid key size: $OPTARG" >&2
           exit 1
         fi
-        TPM_KEY_SLOT=$OPTARG
+        KEY_SIZE=$OPTARG
+        ;;
+      f)
+        if [ ! -f "$OPTARG" ]; then
+          echo "Keyfile does not exist: $OPTARG" >&2
+          exit 1
+        fi
+        LUKS_KEYFILE_PATH="$OPTARG"
         ;;
       t)
         if [[ ! $OPTARG =~ ^-?[0-9]+$ ]] || [ $OPTARG -lt 0 ] || [ $OPTARG -gt 7 ]; then
