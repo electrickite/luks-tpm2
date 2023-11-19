@@ -332,7 +332,7 @@ parse_args() {
           echo "Invalid key size: $OPTARG" >&2
           exit 1
         fi
-        TPM_KEY_SLOT=$OPTARG
+        KEY_SIZE=$OPTARG
         ;;
       t)
         if [[ ! $OPTARG =~ ^-?[0-9]+$ ]] || [ $OPTARG -lt 0 ] || [ $OPTARG -gt 7 ]; then
