@@ -81,6 +81,7 @@ Usage
     -s NUMBER  Key size in byes
                Default: 32
     -f PATH    LUKS keyfile used instead of prompting for LUKS passphraes
+    -o PATH    Optionally write the new LUKS keyfile sealed in the tpm to this path
     -t NUMBER  LUKS slot number for the TPM key
                Default: 1
     -r NUMBER  LUKS slot number for temporary reset passphrase
