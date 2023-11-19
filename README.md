@@ -80,6 +80,7 @@ Usage
     -x HEX     Index of the TPM NVRAM area holding the key
     -s NUMBER  Key size in byes
                Default: 32
+    -f PATH    LUKS keyfile used instead of prompting for LUKS passphraes
     -t NUMBER  LUKS slot number for the TPM key
                Default: 1
     -r NUMBER  LUKS slot number for temporary reset passphrase
