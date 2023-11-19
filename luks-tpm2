@@ -67,7 +67,7 @@ EOF
 init_tpm_key() {
   echo "Initializing LUKS TPM key for $ROOT_DEVICE"
   echo "WARNING: This will permanently delete the key in slot $TPM_KEY_SLOT!"
-  if [ ! "$QUIET_MODE" ]; then
+  if ! in_quiet_mode; then
     read -p "Do you wish to proceed? [y/N] " choice
     if [ "$choice" != "y" ] && [ "$choice" != "Y" ]; then
       echo "Canceled."
@@ -266,6 +266,13 @@ generate_keyfile() {
   dd bs=$KEY_SIZE count=1 if=/dev/urandom of="$KEYFILE" >/dev/null 2>&1
 }
 
+in_quiet_mode() {
+  if [ "$QUIET_MODE" ]; then
+    return 0
+  fi
+  return 1
+}
+
 # Find first LUKS boock device
 find_luks_device() {
   lsblk -pfln -o NAME,FSTYPE | grep crypto_LUKS | head -1 | cut -f1 -d' '
@@ -287,7 +294,7 @@ load_defaults() {
   UNSEAL_PCRS=""
   TPM2TOOLS_TCTI="${TPM2TOOLS_TCTI:-device:/dev/tpmrm0}"
   COMPUTE_COMMAND=""
-  QUIET_MODE=0
+  QUIET_MODE=
 
   CONFFILE="${CONFFILE:-/etc/default/luks-tpm2}"
   if [ -r "$CONFFILE" ]; then
