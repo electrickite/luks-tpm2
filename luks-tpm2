@@ -49,6 +49,7 @@ Options:
   -s NUMBER   Key size in bytes
               Default: 32
   -f PATH     LUKS keyfile used instead of prompting for LUKS passphraes
+  -o PATH     Optionally write the new LUKS keyfile sealed in the tpm to this path
   -t NUMBER   LUKS slot number for the TPM key
               Default: 1
   -r NUMBER   LUKS slot number for temporary reset passphrase
@@ -270,6 +271,11 @@ set_parent_key() {
 # Generate a random key of KEY_SIZE bytes
 generate_keyfile() {
   dd bs=$KEY_SIZE count=1 if=/dev/urandom of="$KEYFILE" >/dev/null 2>&1
+  if [ -n "$NEW_KEYFILE_OUTPUT_PATH" ]; then
+    touch "$NEW_KEYFILE_OUTPUT_PATH"
+    chmod 400 "$NEW_KEYFILE_OUTPUT_PATH"
+    cp "$KEYFILE" "$NEW_KEYFILE_OUTPUT_PATH"
+  fi
 }
 
 in_quiet_mode() {
@@ -293,6 +299,7 @@ load_defaults() {
   PARENT_KEY_PROMPT=""
   PARENT_KEY_PATH=""
   LUKS_KEYFILE_PATH=""
+  NEW_KEYFILE_OUTPUT_PATH=""
   NVRAM_INDEX=""
   KEY_SIZE=32
   TPM_KEY_SLOT=1
@@ -313,7 +320,7 @@ load_defaults() {
 parse_args() {
   ORIGINAL_ARGS="$@"
 
-  while getopts ":hvqm:p:H:Kk:x:s:f:t:r:L:l:T:c:" opt; do
+  while getopts ":hvqm:p:H:Kk:x:s:f:o:t:r:L:l:T:c:" opt; do
     case $opt in
       h)
         version
@@ -361,6 +368,9 @@ parse_args() {
           exit 1
         fi
         LUKS_KEYFILE_PATH="$OPTARG"
+        ;;
+      o)
+        NEW_KEYFILE_OUTPUT_PATH="$OPTARG"
         ;;
       t)
         if [[ ! $OPTARG =~ ^-?[0-9]+$ ]] || [ $OPTARG -lt 0 ] || [ $OPTARG -gt 7 ]; then
