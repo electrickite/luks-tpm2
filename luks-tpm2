@@ -34,6 +34,7 @@ Actions:
 Options:
   -h          Print this help text
   -v          Print version information
+  -q          Don't prompt for confirmation
   -m PATH     Mount point for the tmpfs file system used to store TPM keyfiles
               Default: /root/keyfs
   -p PATH     Sealed keyfile path
@@ -67,11 +68,13 @@ EOF
 init_tpm_key() {
   echo "Initializing LUKS TPM key for $ROOT_DEVICE"
   echo "WARNING: This will permanently delete the key in slot $TPM_KEY_SLOT!"
-  read -p "Do you wish to proceed? [y/N] " choice
-  if [ "$choice" != "y" ] && [ "$choice" != "Y" ]; then
-    echo "Canceled."
-    RETURN_CODE=0
-    return
+  if ! in_quiet_mode; then
+    read -p "Do you wish to proceed? [y/N] " choice
+    if [ "$choice" != "y" ] && [ "$choice" != "Y" ]; then
+      echo "Canceled."
+      RETURN_CODE=0
+      return
+    fi
   fi
 
   ARGS=""
@@ -269,6 +272,13 @@ generate_keyfile() {
   dd bs=$KEY_SIZE count=1 if=/dev/urandom of="$KEYFILE" >/dev/null 2>&1
 }
 
+in_quiet_mode() {
+  if [ "$QUIET_MODE" ]; then
+    return 0
+  fi
+  return 1
+}
+
 # Find first LUKS boock device
 find_luks_device() {
   lsblk -pfln -o NAME,FSTYPE | grep crypto_LUKS | head -1 | cut -f1 -d' '
@@ -291,6 +301,7 @@ load_defaults() {
   UNSEAL_PCRS=""
   TPM2TOOLS_TCTI="${TPM2TOOLS_TCTI:-device:/dev/tpmrm0}"
   COMPUTE_COMMAND=""
+  QUIET_MODE=
 
   CONFFILE="${CONFFILE:-/etc/default/luks-tpm2}"
   if [ -r "$CONFFILE" ]; then
@@ -302,7 +313,7 @@ load_defaults() {
 parse_args() {
   ORIGINAL_ARGS="$@"
 
-  while getopts ":hvm:p:H:Kk:x:s:f:t:r:L:l:T:c:" opt; do
+  while getopts ":hvqm:p:H:Kk:x:s:f:t:r:L:l:T:c:" opt; do
     case $opt in
       h)
         version
@@ -314,6 +325,9 @@ parse_args() {
       v)
         version
         exit 0
+        ;;
+      q)
+        QUIET_MODE=1
         ;;
       m)
         TMPFS_MOUNT="$OPTARG"
