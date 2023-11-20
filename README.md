@@ -67,6 +67,7 @@ Usage
 
     -h         Print help
     -v         Print version
+    -q         Don't prompt for confirmation
     -m PATH    Mount point for the tmpfs file system used to store TPM keyfiles
                Default: /root/keyfs
     -p PATH    Sealed keyfile path
