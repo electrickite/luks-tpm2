@@ -272,7 +272,8 @@ set_parent_key() {
 generate_keyfile() {
   dd bs=$KEY_SIZE count=1 if=/dev/urandom of="$KEYFILE" >/dev/null 2>&1
   if [ -n "$NEW_KEYFILE_OUTPUT_PATH" ]; then
-    umask 777
+    touch "$NEW_KEYFILE_OUTPUT_PATH"
+    chmod 400 "$NEW_KEYFILE_OUTPUT_PATH"
     cp "$KEYFILE" "$NEW_KEYFILE_OUTPUT_PATH"
   fi
 }
