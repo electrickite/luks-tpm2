@@ -236,7 +236,7 @@ seal_key() {
 
     tpm2_nvundefine $tpm_auth_pass "$NVRAM_INDEX" >/dev/null 2>&1
     tpm2_nvdefine $tpm_auth_pass -L "$POLICY_DIGEST" -s $KEY_SIZE -a "policyread|policywrite" "$NVRAM_INDEX" >/dev/null
-    tpm2_nvwrite -P "pcr:$PCRS" -i "$KEYFILE" "$NVRAM_INDEX" >/dev/null
+    tpm2_nvwrite -P "pcr:$PCRS=$PCR_VALUES" -i "$KEYFILE" "$NVRAM_INDEX" >/dev/null
   else
     echo "Sealing keyfile with the TPM..."
     rm -f "$SEALED_KEY_PRIVATE" "$SEALED_KEY_PUBLIC"
